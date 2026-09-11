@@ -1,0 +1,18 @@
+# Fichiers R / RStudio
+.Rhistory
+.RData
+.Ruserdata
+.Rproj.user/
+
+# Fichiers temporaires Quarto
+.quarto/
+*_cache/
+*_files/
+
+# Fichiers système
+.DS_Store
+Thumbs.db
+
+# Fichiers temporaires
+*.tmp
+*.log

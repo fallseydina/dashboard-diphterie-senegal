@@ -1,0 +1,794 @@
+---
+title: "Suivi de l'épidémie de diphtérie au Sénégal"
+subtitle: "Situation au 08 septembre 2026"
+format:
+  dashboard:
+    orientation: rows
+---
+
+
+<style>
+/* Ajustement responsive des Value Boxes */
+@media (max-width: 1400px) {
+
+  .value-box .value-box-value {
+    font-size: 2.2rem !important;
+  }
+
+  .value-box .value-box-title {
+    font-size: 1rem !important;
+  }
+
+  .value-box .bi {
+    font-size: 2.6rem !important;
+  }
+}
+/* Métadonnées : aucun défilement interne */
+.metadata-card .card-body {
+  overflow: visible !important;
+}
+
+.metadata-card {
+  overflow: visible !important;
+}
+</style>
+<style>
+
+/* Deux cartes sur toute la largeur disponible */
+.columns {
+  display: flex !important;
+  width: 100% !important;
+  gap: 12px !important;
+}
+
+.columns > .column {
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  max-width: none !important;
+  min-width: 0 !important;
+}
+
+/* Leaflet prend uniquement la largeur de sa colonne */
+.leaflet {
+  width: 100% !important;
+}
+
+</style>
+
+
+
+```{r}
+#| label: setup
+#| include: false
+
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(
+tidyverse,
+sf,
+leaflet,
+gt
+)
+
+```
+
+
+```{r}
+#| label: import-donnees
+#| include: false
+
+diphterie <- read_csv(
+  "Data/diphterie_senegal_08_septembre_2026.csv",
+  show_col_types = FALSE
+)
+```
+
+
+```{r}
+#| label: indicateurs
+#| include: false
+
+# Nombre total de cas confirmés
+total_cas <- sum(
+  diphterie$cas_confirmes,
+  na.rm = TRUE
+)
+
+# Nombre total de décès
+total_deces <- 8
+
+# Létalité
+letalite <- round(
+  total_deces / total_cas * 100,
+  1
+)
+
+# Nombre total de régions du Sénégal
+total_regions <- 14
+
+# Nombre de régions touchées
+regions_touchees <- n_distinct(diphterie$region)
+
+# Pourcentage de régions touchées
+etendue_geo <- round(
+  regions_touchees / total_regions * 100,
+  1
+)
+```
+```{r}
+#| label: metadonnees
+#| include: false
+
+metadonnees <- list(
+  maladie = "Diphtérie",
+  pays = "Sénégal",
+  date_situation = "08 septembre 2026",
+  date_communication = "09 septembre 2026",
+  source = "Ministère de la Santé",
+  unite_geo = "Région / District sanitaire",
+  indicateur = "Cas confirmés"
+)
+```
+
+
+
+## Indicateurs clés {height=160}
+
+```{r}
+#| content: valuebox
+#| title: "Cas confirmés"
+#| icon: clipboard2-pulse
+#| color: danger
+
+total_cas
+```
+
+```{r}
+#| content: valuebox
+#| title: "Décès"
+#| icon: heart-pulse
+#| color: dark
+
+total_deces
+```
+
+```{r}
+#| content: valuebox
+#| title: "Létalité"
+#| icon: activity
+#| color: warning
+
+paste0(letalite, " %")
+```
+
+```{r}
+#| content: valuebox
+#| title: "Régions touchées"
+#| icon: geo-alt
+#| color: primary
+
+htmltools::HTML(
+  paste0(
+    "<div style='
+      display:flex;
+      align-items:baseline;
+      flex-wrap:nowrap;
+      white-space:nowrap;
+      gap:5px;
+      width:100%;
+      overflow:hidden;
+      line-height:1;
+    '>",
+
+    "<span style='
+      font-size:2em;
+      font-weight:600;
+      flex-shrink:0;
+    '>",
+    etendue_geo, " %",
+    "</span>",
+
+    "<span style='
+      font-size:0.68em;
+      font-weight:500;
+      flex-shrink:1;
+    '>",
+    "(", regions_touchees, " / ", total_regions, " régions)",
+    "</span>",
+
+    "</div>"
+  )
+)
+```
+
+```{r}
+#| label: synthese-region
+#| include: false
+
+synthese_region <- diphterie %>%
+  group_by(region) %>%
+  summarise(
+    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    pourcentage = round(
+      cas_confirmes / sum(cas_confirmes) * 100,
+      1
+    )
+  ) %>%
+  arrange(desc(cas_confirmes))
+```
+
+```{r}
+#| label: controle-donnees
+#| include: false
+
+cat("Nombre total de cas :", total_cas, "\n")
+cat("Nombre total de décès :", total_deces, "\n")
+cat("Létalité :", letalite, "%\n\n")
+cat("Etendue géographique :", etendue_geo, "\n")
+synthese_region
+```
+
+```{r}
+#| label: import-regions
+#| include: false
+
+regions_sn <- st_read(
+  "Data/Spatial/regions_sn.geojson",
+  quiet = TRUE
+)
+
+# Vérification
+#names(regions_sn)
+```
+
+```{r}
+
+#| label: import-districts
+#| include: false
+
+districts_sn <- st_read(
+  "Data/Spatial/districts_sanitaires_sn.geojson",
+  quiet = TRUE
+)
+
+districts_sn <- districts_sn %>%
+  mutate(
+    region_nom = if_else(
+      nom == "Kebemer",
+      "Louga",
+      region_nom
+    )
+  )
+
+#names(districts_sn)
+```
+
+
+
+
+```{r}
+#| label: jointure-regions
+#| include: false
+
+# 1. Jointure entre les régions et les données épidémiologiques
+regions_diphterie <- regions_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
+  left_join(
+    synthese_region,
+    by = c("nom" = "region")
+  ) %>%
+  mutate(
+    cas_confirmes = replace_na(cas_confirmes, 0),
+    pourcentage = replace_na(pourcentage, 0),
+
+    statut = if_else(
+      cas_confirmes > 0,
+      "Région touchée",
+      "Région non touchée"
+    ),
+
+    classe_pct = case_when(
+      pourcentage == 0 ~ "0 % (aucun cas)",
+      pourcentage <= 2 ~ "> 0 à 2 %",
+      pourcentage <= 5 ~ "> 2 à 5 %",
+      pourcentage <= 15 ~ "> 5 à 15 %",
+      TRUE ~ "> 15 %"
+    )
+  )
+
+
+# 2. Définir l'ordre des classes pour la carte et la légende
+regions_diphterie$classe_pct <- factor(
+  regions_diphterie$classe_pct,
+  levels = c(
+    "0 % (aucun cas)",
+    "> 0 à 2 %",
+    "> 2 à 5 %",
+    "> 5 à 15 %",
+    "> 15 %"
+  )
+)
+```
+
+```{r}
+#| label: controle-districts-non-correspondants
+#| include: false
+
+anti_join(
+  diphterie,
+  st_drop_geometry(districts_sn),
+  by = c("district_sanitaire" = "nom")
+) %>%
+  select(region, district_sanitaire, cas_confirmes)
+```
+
+
+
+```{r}
+#| label: controle-noms-districts
+#| include: false
+
+districts_sn %>%
+  st_drop_geometry() %>%
+  select(nom, region_nom) %>%
+  filter(
+    region_nom %in% c(
+      "Kédougou",
+      "Louga",
+      "Dakar",
+      "Diourbel",
+      "Kaolack",
+      "Kolda"
+    )
+  ) %>%
+  arrange(region_nom, nom)
+```
+
+
+```{r}
+#| label: correspondance-districts
+#| include: false
+
+correspondance_districts <- tribble(
+  ~district_sanitaire, ~nom_geojson,
+  "Kédougou",          "Kedougou",
+  "Salémata",          "Salemata",
+  "Kébémer",           "Kebemer",
+  "Darou Moukhty",     "Darou-Mousty",
+  "Guédiawaye",        "Guediawaye",
+  "Mbacké",            "Mbacke",
+  "Guinguinéo",        "Guinguineo",
+  "Vélingara",         "Velingara"
+)
+
+diphterie_jointure <- diphterie %>%
+  left_join(
+    correspondance_districts,
+    by = "district_sanitaire"
+  ) %>%
+  mutate(
+    nom_jointure = coalesce(
+      nom_geojson,
+      district_sanitaire
+    )
+  )
+
+```
+
+```{r}
+#| label: jointure-districts
+#| include: false
+
+districts_diphterie <- districts_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
+  left_join(
+    diphterie_jointure,
+    by = c("nom" = "nom_jointure")
+  ) %>%
+  mutate(
+    cas_confirmes = replace_na(cas_confirmes, 0),
+    statut = if_else(
+      cas_confirmes > 0,
+      "District touché",
+      "District non touché"
+    )
+  )
+```
+
+```{r}
+#| label: controle-correspondance-districts
+#| include: false
+
+districts_diphterie %>%
+  st_drop_geometry() %>%
+  filter(cas_confirmes > 0) %>%
+  select(
+    nom,
+    region,
+    cas_confirmes
+  ) %>%
+  arrange(desc(cas_confirmes))
+
+diphterie_jointure %>%
+  select(
+    district_sanitaire,
+    nom_geojson,
+    nom_jointure,
+    cas_confirmes
+  )
+
+```
+
+```{r}
+#| label: controle-jointure-districts
+#| include: false
+
+districts_diphterie %>%
+  st_drop_geometry() %>%
+  filter(cas_confirmes > 0) %>%
+  select(
+    nom,
+    region_nom,
+    cas_confirmes
+  ) %>%
+  arrange(desc(cas_confirmes))
+
+cat(
+  "Districts touchés :",
+  sum(districts_diphterie$cas_confirmes > 0),
+  "\n"
+)
+
+cat(
+  "Total des cas :",
+  sum(districts_diphterie$cas_confirmes),
+  "\n"
+)
+
+```
+
+```{r}
+#| label: points-districts
+#| include: false
+
+districts_points <- districts_diphterie %>%
+  filter(cas_confirmes > 0) %>%
+  st_transform(32628) %>%       # projection métrique
+  st_point_on_surface() %>%
+  st_transform(4326)            # retour en longitude/latitude pour Leaflet
+```
+
+
+
+
+## Cartographie de l'épidémie {height=600}
+
+::: {.card title="Part (%) des cas confirmés par région" padding="0px"}
+
+
+```{r}
+#| label: carte-regions
+#| #| echo: false
+
+# Palette des classes
+pal_regions <- colorFactor(
+  palette = c(
+    "#F2F2F2",
+    "#FEE5D9",
+    "#FCAE91",
+    "#FB6A4A",
+    "#CB181D"
+  ),
+  domain = regions_diphterie$classe_pct
+)
+
+# Carte
+leaflet(regions_diphterie) %>%
+  
+  # Fond de carte
+  addProviderTiles(
+    providers$CartoDB.Positron
+  ) %>%
+  
+  # Régions
+  addPolygons(
+    fillColor = ~pal_regions(classe_pct),
+    fillOpacity = 0.85,
+    color = "white",
+    weight = 1,
+    
+    # Information au survol
+    label = ~paste0(
+      nom,
+      " : ",
+      pourcentage,
+      " %"
+    ),
+    
+    # Information au clic
+    popup = ~paste0(
+      "<strong>", nom, "</strong><br>",
+      "Cas confirmés : ", cas_confirmes, "<br>",
+           "Part des cas : ", pourcentage, " %<br>",
+      "Statut : ", statut
+    ),
+    
+    # Mise en évidence au survol
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "#333333",
+      bringToFront = TRUE
+    )
+  ) %>%
+  
+  # Légende
+  addLegend(
+    position = "topright",
+    pal = pal_regions,
+    values = ~classe_pct,
+    title = "Part des cas confirmés",
+    opacity = 1
+  )
+```
+
+:::
+
+::: {.card title="Cas confirmés par district sanitaire" padding="0px"}
+
+
+
+```{r}
+#| label: carte-districts
+#| echo: false
+
+# Valeurs de référence pour la légende
+max_cas_district <- max(
+  districts_points$cas_confirmes,
+  na.rm = TRUE
+)
+
+legend_values <- unique(
+  c(
+    1,
+    5,
+    10,
+    max_cas_district
+  )
+)
+
+legend_values <- legend_values[
+  legend_values <= max_cas_district
+]
+
+# Même formule que celle utilisée sur la carte
+legend_radius <- sqrt(legend_values) * 4
+
+# Construction de la légende
+legend_html <- paste0(
+  "<div style='
+    background:white;
+    padding:10px 12px;
+    border-radius:4px;
+    box-shadow:0 1px 5px rgba(0,0,0,0.35);
+    font-size:12px;
+  '>",
+  
+  "<strong>Cas confirmés</strong><br><br>",
+  
+  paste(
+    mapply(
+      function(val, rad) {
+        paste0(
+          "<div style='
+            display:flex;
+            align-items:center;
+            margin-bottom:6px;
+          '>",
+          
+          "<span style='
+            display:inline-block;
+            width:", rad * 2, "px;
+            height:", rad * 2, "px;
+            border-radius:50%;
+            background:#D7301F;
+            opacity:0.75;
+            border:1px solid white;
+            margin-right:8px;
+          '></span>",
+          
+          "<span>", val, " cas</span>",
+          
+          "</div>"
+        )
+      },
+      legend_values,
+      legend_radius
+    ),
+    collapse = ""
+  ),
+  
+  "</div>"
+)
+
+# Carte
+leaflet() %>%
+  
+  addProviderTiles(
+    providers$CartoDB.Positron
+  ) %>%
+  
+  # Limites des districts sanitaires
+  addPolygons(
+    data = districts_diphterie,
+    fill = FALSE,
+    color = "#BDBDBD",
+    weight = 0.7,
+    opacity = 0.8
+  ) %>%
+  
+  # Cercles proportionnels
+  addCircleMarkers(
+    data = districts_points,
+    
+    radius = ~sqrt(cas_confirmes) * 4,
+    
+    fillColor = "#D7301F",
+    fillOpacity = 0.75,
+    color = "white",
+    weight = 1,
+    
+    label = ~paste0(
+      nom,
+      " : ",
+      cas_confirmes,
+      " cas"
+    ),
+    
+    popup = ~paste0(
+      "<strong>", nom, "</strong><br>",
+      "Région : ", region_nom, "<br>",
+      "Cas confirmés : ", cas_confirmes
+    )
+  ) %>%
+  
+  # Légende des cercles proportionnels
+  addControl(
+    html = legend_html,
+    position = "topright",
+  )
+```
+
+
+
+:::
+
+
+```{r}
+#| label: hauteur-tableau
+#| include: false
+
+nb_lignes_tableau <- nrow(synthese_region) + 1  # +1 pour TOTAL
+
+hauteur_tableau <- 180 + nb_lignes_tableau * 42
+```
+
+```{r}
+#| echo: false
+#| results: asis
+
+cat(
+  "## Tableau de synthèse {height=",
+  hauteur_tableau,
+  "}\n\n",
+  sep = ""
+)
+
+```
+
+
+::: {.card title="Synthèse régionale des cas confirmés"}
+
+```{r}
+#| label: tableau-synthese
+#| echo: false
+
+tableau_region <- synthese_region %>%
+  rename(
+    Région = region,
+    `Cas confirmés` = cas_confirmes,
+    `Part des cas (%)` = pourcentage
+  ) %>%
+  bind_rows(
+    tibble(
+      Région = "TOTAL",
+      `Cas confirmés` = sum(synthese_region$cas_confirmes),
+      `Part des cas (%)` = 100
+    )
+  )
+
+tableau_region %>%
+  gt() %>%
+  fmt_number(
+    columns = `Part des cas (%)`,
+    decimals = 1
+  ) %>%
+  cols_align(
+    align = "left",
+    columns = Région
+  ) %>%
+  cols_align(
+    align = "center",
+    columns = c(`Cas confirmés`, `Part des cas (%)`)
+  ) %>%
+  opt_table_outline() %>%
+  opt_vertical_padding(scale = 0.8) %>%
+  tab_options(
+    table.width = pct(100)
+  )
+```
+
+:::
+
+## Métadonnées {height=220}
+ 
+::: {.card title="Informations sur les données" .metadata-card}
+```{r}
+#| label: affichage-metadonnees
+#| echo: false
+
+htmltools::tags$div(
+  style = "
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 70px;
+    width: 100%;
+    font-size: 0.95rem;
+    line-height: 1.5;
+  ",
+
+  # Colonne gauche
+  htmltools::tags$div(
+    htmltools::tags$p(
+      htmltools::tags$strong("Maladie : "),
+      metadonnees$maladie
+    ),
+    htmltools::tags$p(
+      htmltools::tags$strong("Date de situation : "),
+      metadonnees$date_situation
+    ),
+    htmltools::tags$p(
+      htmltools::tags$strong("Source : "),
+      metadonnees$source
+    ),
+    htmltools::tags$p(
+      htmltools::tags$strong("Indicateur principal : "),
+      metadonnees$indicateur
+    )
+  ),
+
+  # Colonne droite
+  htmltools::tags$div(
+    htmltools::tags$p(
+      htmltools::tags$strong("Pays : "),
+      metadonnees$pays
+    ),
+    htmltools::tags$p(
+      htmltools::tags$strong("Date du communiqué : "),
+      metadonnees$date_communication
+    ),
+    htmltools::tags$p(
+      htmltools::tags$strong("Unité géographique : "),
+      metadonnees$unite_geo
+    )
+  )
+)
+```
+
+
+
+
+
