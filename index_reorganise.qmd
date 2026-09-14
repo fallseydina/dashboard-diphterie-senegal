@@ -5,10 +5,9 @@ format:
   dashboard:
     orientation: rows
     embed-resources: true
-
 ---
 
-
+```{=html}
 <style>
 /* Ajustement responsive des Value Boxes */
 @media (max-width: 1400px) {
@@ -34,30 +33,35 @@ format:
   overflow: visible !important;
 }
 </style>
-<style>
-
-/* Deux cartes sur toute la largeur disponible */
-.columns {
-  display: flex !important;
-  width: 100% !important;
-  gap: 12px !important;
-}
-
-.columns > .column {
-  flex: 1 1 0 !important;
-  width: 0 !important;
-  max-width: none !important;
-  min-width: 0 !important;
-}
-
-/* Leaflet prend uniquement la largeur de sa colonne */
-.leaflet {
-  width: 100% !important;
-}
-
-</style>
+```
 
 
+<!-- ============================================================ -->
+
+<!-- 1. CONFIGURATION DU DASHBOARD                                -->
+
+<!-- ============================================================ -->
+
+```{r}
+#| label: metadonnees
+#| include: false
+
+metadonnees <- list(
+  maladie = "Diphtérie",
+  pays = "Sénégal",
+  date_situation = "08 septembre 2026",
+  date_communication = "09 septembre 2026",
+  source = "Ministère de la Santé",
+  unite_geo = "Région / District sanitaire",
+  indicateur = "Cas confirmés"
+)
+```
+
+<!-- ============================================================ -->
+
+<!-- 2. PACKAGES                                                  -->
+
+<!-- ============================================================ -->
 
 ```{r}
 #| label: setup
@@ -73,6 +77,11 @@ gt
 
 ```
 
+<!-- ============================================================ -->
+
+<!-- 3. IMPORTATION DES DONNÉES                                  -->
+
+<!-- ============================================================ -->
 
 ```{r}
 #| label: import-donnees
@@ -84,6 +93,46 @@ diphterie <- read_csv(
 )
 ```
 
+```{r}
+#| label: import-regions
+#| include: false
+
+regions_sn <- st_read(
+  "Data/Spatial/regions_sn.geojson",
+  quiet = TRUE
+)
+
+# Vérification
+#names(regions_sn)
+```
+
+```{r}
+
+#| label: import-districts
+#| include: false
+
+districts_sn <- st_read(
+  "Data/Spatial/districts_sanitaires_sn.geojson",
+  quiet = TRUE
+)
+
+districts_sn <- districts_sn %>%
+  mutate(
+    region_nom = if_else(
+      nom == "Kebemer",
+      "Louga",
+      region_nom
+    )
+  )
+
+#names(districts_sn)
+```
+
+<!-- ============================================================ -->
+
+<!-- 4. PRÉPARATION ET TRAITEMENT DES DONNÉES                    -->
+
+<!-- ============================================================ -->
 
 ```{r}
 #| label: indicateurs
@@ -117,8 +166,295 @@ etendue_geo <- round(
 )
 ```
 
+```{r}
+#| label: synthese-region
+#| include: false
 
-## Indicateurs clés {height=160}
+synthese_region <- diphterie %>%
+  group_by(region) %>%
+  summarise(
+    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    pourcentage = round(
+      cas_confirmes / sum(cas_confirmes) * 100,
+      1
+    )
+  ) %>%
+  arrange(desc(cas_confirmes))
+```
+```{r}
+#| label: preparation-tableau-region
+#| include: false
+
+tableau_region <- synthese_region %>%
+  rename(
+    Région = region,
+    `Cas confirmés` = cas_confirmes,
+    `Part des cas (%)` = pourcentage
+  ) %>%
+  bind_rows(
+    tibble(
+      Région = "TOTAL",
+      `Cas confirmés` = sum(synthese_region$cas_confirmes),
+      `Part des cas (%)` = 100
+    )
+  )
+```
+
+
+
+```{r}
+#| label: correspondance-districts
+#| include: false
+
+correspondance_districts <- tribble(
+  ~district_sanitaire, ~nom_geojson,
+  "Kédougou",          "Kedougou",
+  "Salémata",          "Salemata",
+  "Kébémer",           "Kebemer",
+  "Darou Moukhty",     "Darou-Mousty",
+  "Guédiawaye",        "Guediawaye",
+  "Mbacké",            "Mbacke",
+  "Guinguinéo",        "Guinguineo",
+  "Vélingara",         "Velingara"
+)
+
+diphterie_jointure <- diphterie %>%
+  left_join(
+    correspondance_districts,
+    by = "district_sanitaire"
+  ) %>%
+  mutate(
+    nom_jointure = coalesce(
+      nom_geojson,
+      district_sanitaire
+    )
+  )
+
+```
+
+```{r}
+#| label: jointure-regions
+#| include: false
+
+# 1. Jointure entre les régions et les données épidémiologiques
+regions_diphterie <- regions_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
+  left_join(
+    synthese_region,
+    by = c("nom" = "region")
+  ) %>%
+  mutate(
+    cas_confirmes = replace_na(cas_confirmes, 0),
+    pourcentage = replace_na(pourcentage, 0),
+
+    statut = if_else(
+      cas_confirmes > 0,
+      "Région touchée",
+      "Région non touchée"
+    ),
+
+    classe_pct = case_when(
+      pourcentage == 0 ~ "0 % (aucun cas)",
+      pourcentage <= 2 ~ "> 0 à 2 %",
+      pourcentage <= 5 ~ "> 2 à 5 %",
+      pourcentage <= 15 ~ "> 5 à 15 %",
+      TRUE ~ "> 15 %"
+    )
+  )
+
+
+# 2. Définir l'ordre des classes pour la carte et la légende
+regions_diphterie$classe_pct <- factor(
+  regions_diphterie$classe_pct,
+  levels = c(
+    "0 % (aucun cas)",
+    "> 0 à 2 %",
+    "> 2 à 5 %",
+    "> 5 à 15 %",
+    "> 15 %"
+  )
+)
+```
+
+```{r}
+#| label: jointure-districts
+#| include: false
+
+districts_diphterie <- districts_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
+  left_join(
+    diphterie_jointure,
+    by = c("nom" = "nom_jointure")
+  ) %>%
+  mutate(
+    cas_confirmes = replace_na(cas_confirmes, 0),
+    statut = if_else(
+      cas_confirmes > 0,
+      "District touché",
+      "District non touché"
+    )
+  )
+```
+
+```{r}
+#| label: points-districts
+#| include: false
+
+districts_points <- districts_diphterie %>%
+  filter(cas_confirmes > 0) %>%
+  st_transform(32628) %>%       # projection métrique
+  st_point_on_surface() %>%
+  st_transform(4326)            # retour en longitude/latitude pour Leaflet
+```
+
+```{r}
+#| label: donnees-graphique-districts
+#| include: false
+
+graphique_districts <- diphterie %>%
+  group_by(district_sanitaire) %>%
+  summarise(
+    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(cas_confirmes)
+```
+
+```{r}
+#| label: donnees-letalite
+#| include: false
+
+donnees_letalite <- tibble(
+  categorie = c("Létalité", "Complément"),
+  valeur = c(
+    letalite,
+    100 - letalite
+  )
+)
+```
+
+```{r}
+#| label: hauteur-tableau
+#| include: false
+
+nb_lignes_tableau <- nrow(synthese_region) + 1  # +1 pour TOTAL
+
+hauteur_tableau <- 180 + nb_lignes_tableau * 42
+```
+
+<!-- ============================================================ -->
+
+<!-- 5. CONTRÔLES QUALITÉ                                        -->
+
+<!-- ============================================================ -->
+
+```{r}
+#| label: controle-donnees
+#| include: false
+
+cat("Nombre total de cas :", total_cas, "\n")
+cat("Nombre total de décès :", total_deces, "\n")
+cat("Létalité :", letalite, "%\n\n")
+cat("Etendue géographique :", etendue_geo, "\n")
+synthese_region
+```
+
+```{r}
+#| label: controle-districts-non-correspondants
+#| include: false
+
+anti_join(
+  diphterie,
+  st_drop_geometry(districts_sn),
+  by = c("district_sanitaire" = "nom")
+) %>%
+  select(region, district_sanitaire, cas_confirmes)
+```
+
+```{r}
+#| label: controle-noms-districts
+#| include: false
+
+districts_sn %>%
+  st_drop_geometry() %>%
+  select(nom, region_nom) %>%
+  filter(
+    region_nom %in% c(
+      "Kédougou",
+      "Louga",
+      "Dakar",
+      "Diourbel",
+      "Kaolack",
+      "Kolda"
+    )
+  ) %>%
+  arrange(region_nom, nom)
+```
+
+```{r}
+#| label: controle-correspondance-districts
+#| include: false
+
+districts_diphterie %>%
+  st_drop_geometry() %>%
+  filter(cas_confirmes > 0) %>%
+  select(
+    nom,
+    region,
+    cas_confirmes
+  ) %>%
+  arrange(desc(cas_confirmes))
+
+diphterie_jointure %>%
+  select(
+    district_sanitaire,
+    nom_geojson,
+    nom_jointure,
+    cas_confirmes
+  )
+
+```
+
+```{r}
+#| label: controle-jointure-districts
+#| include: false
+
+districts_diphterie %>%
+  st_drop_geometry() %>%
+  filter(cas_confirmes > 0) %>%
+  select(
+    nom,
+    region_nom,
+    cas_confirmes
+  ) %>%
+  arrange(desc(cas_confirmes))
+
+cat(
+  "Districts touchés :",
+  sum(districts_diphterie$cas_confirmes > 0),
+  "\n"
+)
+
+cat(
+  "Total des cas :",
+  sum(districts_diphterie$cas_confirmes),
+  "\n"
+)
+
+```
+
+<!-- ============================================================ -->
+
+<!-- 6. AFFICHAGE DU DASHBOARD                                   -->
+
+<!-- ============================================================ -->
+
+## Indicateurs clés {height="160"}
 
 ```{r}
 #| content: valuebox
@@ -187,279 +523,12 @@ htmltools::HTML(
 )
 ```
 
-```{r}
-#| label: synthese-region
-#| include: false
-
-synthese_region <- diphterie %>%
-  group_by(region) %>%
-  summarise(
-    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  mutate(
-    pourcentage = round(
-      cas_confirmes / sum(cas_confirmes) * 100,
-      1
-    )
-  ) %>%
-  arrange(desc(cas_confirmes))
-```
-
-```{r}
-#| label: controle-donnees
-#| include: false
-
-cat("Nombre total de cas :", total_cas, "\n")
-cat("Nombre total de décès :", total_deces, "\n")
-cat("Létalité :", letalite, "%\n\n")
-cat("Etendue géographique :", etendue_geo, "\n")
-synthese_region
-```
-
-```{r}
-#| label: import-regions
-#| include: false
-
-regions_sn <- st_read(
-  "Data/Spatial/regions_sn.geojson",
-  quiet = TRUE
-)
-
-# Vérification
-#names(regions_sn)
-```
-
-```{r}
-
-#| label: import-districts
-#| include: false
-
-districts_sn <- st_read(
-  "Data/Spatial/districts_sanitaires_sn.geojson",
-  quiet = TRUE
-)
-
-districts_sn <- districts_sn %>%
-  mutate(
-    region_nom = if_else(
-      nom == "Kebemer",
-      "Louga",
-      region_nom
-    )
-  )
-
-#names(districts_sn)
-```
-
-
-
-
-```{r}
-#| label: jointure-regions
-#| include: false
-
-# 1. Jointure entre les régions et les données épidémiologiques
-regions_diphterie <- regions_sn %>%
-  st_make_valid() %>%
-  st_transform(4326) %>%
-  left_join(
-    synthese_region,
-    by = c("nom" = "region")
-  ) %>%
-  mutate(
-    cas_confirmes = replace_na(cas_confirmes, 0),
-    pourcentage = replace_na(pourcentage, 0),
-
-    statut = if_else(
-      cas_confirmes > 0,
-      "Région touchée",
-      "Région non touchée"
-    ),
-
-    classe_pct = case_when(
-      pourcentage == 0 ~ "0 % (aucun cas)",
-      pourcentage <= 2 ~ "> 0 à 2 %",
-      pourcentage <= 5 ~ "> 2 à 5 %",
-      pourcentage <= 15 ~ "> 5 à 15 %",
-      TRUE ~ "> 15 %"
-    )
-  )
-
-
-# 2. Définir l'ordre des classes pour la carte et la légende
-regions_diphterie$classe_pct <- factor(
-  regions_diphterie$classe_pct,
-  levels = c(
-    "0 % (aucun cas)",
-    "> 0 à 2 %",
-    "> 2 à 5 %",
-    "> 5 à 15 %",
-    "> 15 %"
-  )
-)
-```
-
-```{r}
-#| label: controle-districts-non-correspondants
-#| include: false
-
-anti_join(
-  diphterie,
-  st_drop_geometry(districts_sn),
-  by = c("district_sanitaire" = "nom")
-) %>%
-  select(region, district_sanitaire, cas_confirmes)
-```
-
-
-
-```{r}
-#| label: controle-noms-districts
-#| include: false
-
-districts_sn %>%
-  st_drop_geometry() %>%
-  select(nom, region_nom) %>%
-  filter(
-    region_nom %in% c(
-      "Kédougou",
-      "Louga",
-      "Dakar",
-      "Diourbel",
-      "Kaolack",
-      "Kolda"
-    )
-  ) %>%
-  arrange(region_nom, nom)
-```
-
-
-```{r}
-#| label: correspondance-districts
-#| include: false
-
-correspondance_districts <- tribble(
-  ~district_sanitaire, ~nom_geojson,
-  "Kédougou",          "Kedougou",
-  "Salémata",          "Salemata",
-  "Kébémer",           "Kebemer",
-  "Darou Moukhty",     "Darou-Mousty",
-  "Guédiawaye",        "Guediawaye",
-  "Mbacké",            "Mbacke",
-  "Guinguinéo",        "Guinguineo",
-  "Vélingara",         "Velingara"
-)
-
-diphterie_jointure <- diphterie %>%
-  left_join(
-    correspondance_districts,
-    by = "district_sanitaire"
-  ) %>%
-  mutate(
-    nom_jointure = coalesce(
-      nom_geojson,
-      district_sanitaire
-    )
-  )
-
-```
-
-```{r}
-#| label: jointure-districts
-#| include: false
-
-districts_diphterie <- districts_sn %>%
-  st_make_valid() %>%
-  st_transform(4326) %>%
-  left_join(
-    diphterie_jointure,
-    by = c("nom" = "nom_jointure")
-  ) %>%
-  mutate(
-    cas_confirmes = replace_na(cas_confirmes, 0),
-    statut = if_else(
-      cas_confirmes > 0,
-      "District touché",
-      "District non touché"
-    )
-  )
-```
-
-```{r}
-#| label: controle-correspondance-districts
-#| include: false
-
-districts_diphterie %>%
-  st_drop_geometry() %>%
-  filter(cas_confirmes > 0) %>%
-  select(
-    nom,
-    region,
-    cas_confirmes
-  ) %>%
-  arrange(desc(cas_confirmes))
-
-diphterie_jointure %>%
-  select(
-    district_sanitaire,
-    nom_geojson,
-    nom_jointure,
-    cas_confirmes
-  )
-
-```
-
-```{r}
-#| label: controle-jointure-districts
-#| include: false
-
-districts_diphterie %>%
-  st_drop_geometry() %>%
-  filter(cas_confirmes > 0) %>%
-  select(
-    nom,
-    region_nom,
-    cas_confirmes
-  ) %>%
-  arrange(desc(cas_confirmes))
-
-cat(
-  "Districts touchés :",
-  sum(districts_diphterie$cas_confirmes > 0),
-  "\n"
-)
-
-cat(
-  "Total des cas :",
-  sum(districts_diphterie$cas_confirmes),
-  "\n"
-)
-
-```
-
-```{r}
-#| label: points-districts
-#| include: false
-
-districts_points <- districts_diphterie %>%
-  filter(cas_confirmes > 0) %>%
-  st_transform(32628) %>%       # projection métrique
-  st_point_on_surface() %>%
-  st_transform(4326)            # retour en longitude/latitude pour Leaflet
-```
-
-
-
-
-## Cartographie de l'épidémie {height=600}
+## Cartographie de l'épidémie {height="600"}
 
 ::: {.card title="Part (%) des cas confirmés par région" padding="0px"}
-
-
 ```{r}
 #| label: carte-regions
-#| #| echo: false
+#| echo: false
 
 # Palette des classes
 pal_regions <- colorFactor(
@@ -521,13 +590,9 @@ leaflet(regions_diphterie) %>%
     opacity = 1
   )
 ```
-
 :::
 
 ::: {.card title="Cas confirmés par district sanitaire" padding="0px"}
-
-
-
 ```{r}
 #| label: carte-districts
 #| echo: false
@@ -648,26 +713,12 @@ leaflet() %>%
     position = "topright",
   )
 ```
-
-
 :::
 
-## Répartition des cas et létalité {height=500}
+## Répartition géographique {height=500}
+
 
 ::: {.card title="Cas confirmés par district sanitaire"}
-
-```{r}
-#| label: donnees-graphique-districts
-#| include: false
-
-graphique_districts <- diphterie %>%
-  group_by(district_sanitaire) %>%
-  summarise(
-    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
-    .groups = "drop"
-  ) %>%
-  arrange(cas_confirmes)
-```
 
 ```{r}
 #| label: graphique-cas-districts
@@ -708,115 +759,14 @@ ggplot(
   )
 ```
 
-::: {.card title="Létalité des cas confirmés"}
-
-```{r}
-#| label: donnees-letalite
-#| include: false
-
-donnees_letalite <- tibble(
-  categorie = c("Létalité", "Complément"),
-  valeur = c(
-    letalite,
-    100 - letalite
-  )
-)
-```
-
-
-```{r}
-#| label: graphique-letalite
-#| echo: false
-
-ggplot(
-  donnees_letalite,
-  aes(
-    x = 2,
-    y = valeur,
-    fill = categorie
-  )
-) +
-  geom_col(
-    width = 1,
-    color = "white"
-  ) +
-  coord_polar(theta = "y") +
-  xlim(0.5, 2.5) +
-  scale_fill_manual(
-    values = c(
-      "Létalité" = "#D7301F",
-      "Complément" = "#E9ECEF"
-    )
-  ) +
-  annotate(
-    "text",
-    x = 0.5,
-    y = 0,
-    label = paste0(letalite, " %"),
-    size = 7,
-    fontface = "bold"
-  ) +
-  annotate(
-    "text",
-    x = 0.5,
-    y = 0,
-    label = "\n\nLétalité",
-    size = 4
-  ) +
-  theme_void() +
-  theme(
-    legend.position = "none",
-    plot.margin = margin(10, 10, 10, 10)
-  )
-```
-
-
-
-
 :::
 
 
-::: {.card title="Synthèse régionale des cas confirmés"}
-
-```{r}
-#| label: hauteur-tableau
-#| include: false
-
-nb_lignes_tableau <- nrow(synthese_region) + 1  # +1 pour TOTAL
-
-hauteur_tableau <- 180 + nb_lignes_tableau * 42
-```
-
-```{r}
-#| echo: false
-#| results: asis
-
-cat(
-  "## Tableau de synthèse {height=",
-  hauteur_tableau,
-  "}\n\n",
-  sep = ""
-)
-
-```
+::: {.card title="Synthèse régionale"}
 
 ```{r}
 #| label: tableau-synthese
 #| echo: false
-
-tableau_region <- synthese_region %>%
-  rename(
-    Région = region,
-    `Cas confirmés` = cas_confirmes,
-    `Part des cas (%)` = pourcentage
-  ) %>%
-  bind_rows(
-    tibble(
-      Région = "TOTAL",
-      `Cas confirmés` = sum(synthese_region$cas_confirmes),
-      `Part des cas (%)` = 100
-    )
-  )
 
 tableau_region %>%
   gt() %>%
@@ -830,35 +780,25 @@ tableau_region %>%
   ) %>%
   cols_align(
     align = "center",
-    columns = c(`Cas confirmés`, `Part des cas (%)`)
+    columns = c(
+      `Cas confirmés`,
+      `Part des cas (%)`
+    )
   ) %>%
   opt_table_outline() %>%
   opt_vertical_padding(scale = 0.8) %>%
   tab_options(
     table.width = pct(100)
   )
-```
+``` 
 
 :::
 
-## Métadonnées {height=220}
 
-```{r}
-#| label: metadonnees
-#| include: false
+## Métadonnées {height="220"}
 
-metadonnees <- list(
-  maladie = "Diphtérie",
-  pays = "Sénégal",
-  date_situation = "08 septembre 2026",
-  date_communication = "09 septembre 2026",
-  source = "Ministère de la Santé",
-  unite_geo = "Région / District sanitaire",
-  indicateur = "Cas confirmés"
-)
-```
- 
-::: {.card title="Informations sur les données" .metadata-card}
+::: {.card .metadata-card title="Informations sur les données"}
+
 ```{r}
 #| label: affichage-metadonnees
 #| echo: false
@@ -910,8 +850,4 @@ htmltools::tags$div(
   )
 )
 ```
-
-
-
-
-
+:::
