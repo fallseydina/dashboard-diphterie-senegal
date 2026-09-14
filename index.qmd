@@ -1,6 +1,6 @@
 ---
 title: "Suivi de l'épidémie de diphtérie au Sénégal"
-subtitle: "Situation au 08 septembre 2026"
+subtitle: "Situation au 13 septembre 2026"
 format:
   dashboard:
     orientation: rows
@@ -49,8 +49,8 @@ format:
 metadonnees <- list(
   maladie = "Diphtérie",
   pays = "Sénégal",
-  date_situation = "08 septembre 2026",
-  date_communication = "09 septembre 2026",
+  date_situation = "",
+  date_communication = "14 septembre 2026",
   source = "Ministère de la Santé",
   unite_geo = "Région / District sanitaire",
   indicateur = "Cas confirmés"
@@ -88,7 +88,7 @@ gt
 #| include: false
 
 diphterie <- read_csv(
-  "Data/diphterie_senegal_08_septembre_2026.csv",
+  "Data/diphterie_senegal_13_septembre_2026.csv",
   show_col_types = FALSE
 )
 ```
@@ -145,7 +145,7 @@ total_cas <- sum(
 )
 
 # Nombre total de décès
-total_deces <- 8
+total_deces <- 9
 
 # Létalité
 letalite <- round(
