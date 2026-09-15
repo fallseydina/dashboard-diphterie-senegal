@@ -84,13 +84,24 @@ gt
 <!-- ============================================================ -->
 
 ```{r}
-#| label: import-donnees
+#| label: import-donnees-epidemie
 #| include: false
 
-diphterie <- read_csv(
+# Situation précédente : 08 septembre 2026
+diphterie_precedente <- read_csv(
+  "Data/diphterie_senegal_08_septembre_2026.csv",
+  show_col_types = FALSE
+)
+
+# Situation actuelle : 13 septembre 2026
+diphterie_actuelle <- read_csv(
   "Data/diphterie_senegal_13_septembre_2026.csv",
   show_col_types = FALSE
 )
+
+# La situation actuelle reste la base utilisée
+# par le premier onglet du dashboard
+diphterie <- diphterie_actuelle
 ```
 
 ```{r}
@@ -201,6 +212,53 @@ tableau_region <- synthese_region %>%
       `Part des cas (%)` = 100
     )
   )
+```
+
+```{r}
+#| label: indicateurs-evolution
+#| include: false
+
+# --- Cas confirmés ---
+cas_precedents <- sum(
+  diphterie_precedente$cas_confirmes,
+  na.rm = TRUE
+)
+
+cas_actuels <- sum(
+  diphterie_actuelle$cas_confirmes,
+  na.rm = TRUE
+)
+
+evolution_cas <- cas_actuels - cas_precedents
+
+evolution_cas_pct <- round(
+  (evolution_cas / cas_precedents) * 100,
+  1
+)
+
+
+# --- Régions touchées ---
+regions_precedentes <- n_distinct(
+  diphterie_precedente$region
+)
+
+regions_actuelles <- n_distinct(
+  diphterie_actuelle$region
+)
+
+evolution_regions <- regions_actuelles - regions_precedentes
+
+
+# --- Districts sanitaires touchés ---
+districts_precedents <- n_distinct(
+  diphterie_precedente$district_sanitaire
+)
+
+districts_actuels <- n_distinct(
+  diphterie_actuelle$district_sanitaire
+)
+
+evolution_districts <- districts_actuels - districts_precedents
 ```
 
 
@@ -453,6 +511,8 @@ cat(
 <!-- 6. AFFICHAGE DU DASHBOARD                                   -->
 
 <!-- ============================================================ -->
+
+# Situation actuelle
 
 ## Indicateurs clés {height="160"}
 
@@ -851,4 +911,59 @@ htmltools::tags$div(
 )
 ```
 :::
+
+# Évolution
+
+## Indicateurs d'évolution {height=180}
+
+```{r}
+#| label: evolution-cas
+#| echo: false
+#| content: valuebox
+#| title: "Cas confirmés"
+
+list(
+  value = paste0("+", evolution_cas),
+  icon = "graph-up-arrow",
+  color = "danger",
+  subtitle = paste0(
+    cas_precedents, " → ", cas_actuels,
+    "  (+", evolution_cas_pct, " %)"
+  )
+)
+```
+
+```{r}
+#| label: evolution-regions
+#| echo: false
+#| content: valuebox
+#| title: "Régions touchées"
+
+list(
+  value = paste0("+", evolution_regions),
+  icon = "geo-alt",
+  color = "warning",
+  subtitle = paste0(
+    regions_precedentes, " → ", regions_actuelles,
+    " régions"
+  )
+)
+```
+
+```{r}
+#| label: evolution-districts
+#| echo: false
+#| content: valuebox
+#| title: "Districts sanitaires touchés"
+
+list(
+  value = paste0("+", evolution_districts),
+  icon = "hospital",
+  color = "warning",
+  subtitle = paste0(
+    districts_precedents, " → ", districts_actuels,
+    " districts"
+  )
+)
+```
 
