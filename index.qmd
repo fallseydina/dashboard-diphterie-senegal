@@ -261,6 +261,50 @@ districts_actuels <- n_distinct(
 evolution_districts <- districts_actuels - districts_precedents
 ```
 
+```{r}
+#| label: comparaison-regions
+#| include: false
+
+# Situation précédente par région
+regions_precedentes_data <- diphterie_precedente %>%
+  group_by(region) %>%
+  summarise(
+    cas_precedents = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Situation actuelle par région
+regions_actuelles_data <- diphterie_actuelle %>%
+  group_by(region) %>%
+  summarise(
+    cas_actuels = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Comparaison des deux situations
+comparaison_regions <- full_join(
+  regions_precedentes_data,
+  regions_actuelles_data,
+  by = "region"
+) %>%
+  mutate(
+    cas_precedents = replace_na(cas_precedents, 0),
+    cas_actuels = replace_na(cas_actuels, 0),
+
+    evolution = cas_actuels - cas_precedents,
+
+    statut_evolution = case_when(
+      cas_precedents == 0 & cas_actuels > 0 ~ "Nouvelle région touchée",
+      cas_actuels > cas_precedents ~ "Augmentation",
+      cas_actuels == cas_precedents ~ "Stable",
+      cas_actuels < cas_precedents ~ "Diminution"
+    )
+  ) %>%
+  arrange(desc(cas_actuels))
+
+print(comparaison_regions)
+```
+
 
 
 ```{r}
@@ -967,3 +1011,79 @@ list(
 )
 ```
 
+## Évolution des cas par région {height=500}
+
+::: {.card}
+
+### Comparaison des cas confirmés par région
+
+```{r}
+#| label: graphique-comparaison-regions
+#| echo: false
+
+# Ordre des régions selon le nombre de cas de la situation actuelle
+ordre_regions <- comparaison_regions %>%
+  arrange(cas_actuels) %>%
+  pull(region)
+
+# Données au format long pour le graphique
+graphique_regions_evolution <- comparaison_regions %>%
+  select(region, cas_precedents, cas_actuels) %>%
+  pivot_longer(
+    cols = c(cas_precedents, cas_actuels),
+    names_to = "situation",
+    values_to = "nombre_cas"
+  ) %>%
+  mutate(
+    nom_region = factor(
+      as.character(region),
+      levels = ordre_regions
+    ),
+    situation = factor(
+      situation,
+      levels = c("cas_precedents", "cas_actuels"),
+      labels = c("08 septembre", "13 septembre")
+    )
+  )
+
+# Graphique
+ggplot(
+  graphique_regions_evolution,
+  aes(
+    x = nombre_cas,
+    y = nom_region,
+    fill = situation
+  )
+) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7
+  ) +
+  geom_text(
+    aes(
+      label = ifelse(nombre_cas > 0, nombre_cas, "")
+    ),
+    position = position_dodge(width = 0.8),
+    hjust = -0.25,
+    size = 3.4
+  ) +
+  scale_x_continuous(
+    expand = expansion(mult = c(0, 0.08))
+  ) +
+  labs(
+    x = "Nombre de cas confirmés",
+    y = NULL,
+    fill = "Situation"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    legend.position = "top",
+    axis.text.y = element_text(size = 10),
+    axis.title.x = element_text(margin = margin(t = 10)),
+    plot.margin = margin(10, 25, 10, 10)
+  )
+```
+
+:::
