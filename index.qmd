@@ -302,40 +302,42 @@ comparaison_regions <- full_join(
   ) %>%
   arrange(desc(cas_actuels))
 
+#
 print(comparaison_regions)
 ```
 
 
 
 ```{r}
-#| label: correspondance-districts
+#| label: preparation-carte-evolution-regions
 #| include: false
 
-correspondance_districts <- tribble(
-  ~district_sanitaire, ~nom_geojson,
-  "Kédougou",          "Kedougou",
-  "Salémata",          "Salemata",
-  "Kébémer",           "Kebemer",
-  "Darou Moukhty",     "Darou-Mousty",
-  "Guédiawaye",        "Guediawaye",
-  "Mbacké",            "Mbacke",
-  "Guinguinéo",        "Guinguineo",
-  "Vélingara",         "Velingara"
-)
-
-diphterie_jointure <- diphterie %>%
+evolution_regions_carte <- regions_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
   left_join(
-    correspondance_districts,
-    by = "district_sanitaire"
+    comparaison_regions,
+    by = c("nom" = "region")
   ) %>%
   mutate(
-    nom_jointure = coalesce(
-      nom_geojson,
-      district_sanitaire
+    cas_precedents = replace_na(cas_precedents, 0),
+    cas_actuels = replace_na(cas_actuels, 0),
+
+    statut_evolution = case_when(
+      cas_precedents == 0 & cas_actuels == 0 ~ "Région non touchée",
+
+      cas_precedents == 0 & cas_actuels > 0 ~
+        "Nouvelle région touchée",
+
+      cas_precedents > 0 & cas_actuels > 0 ~
+        "Région déjà touchée",
+
+      cas_precedents > 0 & cas_actuels == 0 ~
+        "Plus aucun cas dans la situation actuelle"
     )
   )
-
 ```
+
 
 ```{r}
 #| label: jointure-regions
@@ -383,6 +385,39 @@ regions_diphterie$classe_pct <- factor(
 ```
 
 ```{r}
+#| label: preparation-jointure-districts
+#| include: false
+
+# Correspondances entre les noms du fichier épidémiologique
+# et les noms du référentiel géographique
+correspondance_districts <- c(
+  "Dakar-Ouest" = "Dakar Ouest",
+  "Dakar-Sud"   = "Dakar Sud",
+  "Guédiawaye"  = "Guediawaye",
+  "Kébémer"     = "Kebemer",
+  "Mbacké"      = "Mbacke",
+  "Guinguinéo"  = "Guinguineo",
+  "Vélingara"   = "Velingara",
+  "Kédougou"    = "Kedougou",
+  "Salémata"    = "Salemata"
+)
+
+# Préparation des noms pour la jointure spatiale
+diphterie_jointure <- diphterie %>%
+  mutate(
+    nom_geojson = unname(
+      correspondance_districts[district_sanitaire]
+    ),
+
+    nom_jointure = if_else(
+      !is.na(nom_geojson),
+      nom_geojson,
+      district_sanitaire
+    )
+  )
+```
+
+```{r}
 #| label: jointure-districts
 #| include: false
 
@@ -402,6 +437,89 @@ districts_diphterie <- districts_sn %>%
     )
   )
 ```
+
+```{r}
+#| label: preparation-evolution-districts
+#| include: false
+
+# Situation précédente par district
+districts_precedents_data <- diphterie_precedente %>%
+  mutate(
+    district_sanitaire = case_when(
+      district_sanitaire == "Darou Moukhty" ~ "Darou-Mousty",
+      TRUE ~ district_sanitaire
+    )
+  ) %>%
+  group_by(district_sanitaire) %>%
+  summarise(
+    cas_precedents = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Situation actuelle par district
+districts_actuels_data <- diphterie_actuelle %>%
+  group_by(district_sanitaire) %>%
+  summarise(
+    cas_actuels = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Comparaison des deux situations
+comparaison_districts <- full_join(
+  districts_precedents_data,
+  districts_actuels_data,
+  by = "district_sanitaire"
+) %>%
+  mutate(
+    cas_precedents = replace_na(cas_precedents, 0),
+    cas_actuels = replace_na(cas_actuels, 0),
+
+    # Utilisation des mêmes correspondances que pour la carte actuelle
+    nom_geojson = unname(
+      correspondance_districts[district_sanitaire]
+    ),
+
+    nom_jointure = if_else(
+      !is.na(nom_geojson),
+      nom_geojson,
+      district_sanitaire
+    )
+  )
+```
+
+```{r}
+#| label: carte-evolution-districts-donnees
+#| include: false
+
+evolution_districts_carte <- districts_sn %>%
+  st_make_valid() %>%
+  st_transform(4326) %>%
+  left_join(
+    comparaison_districts,
+    by = c("nom" = "nom_jointure")
+  ) %>%
+  mutate(
+    cas_precedents = replace_na(cas_precedents, 0),
+    cas_actuels = replace_na(cas_actuels, 0),
+
+    statut_evolution = case_when(
+      cas_precedents == 0 & cas_actuels == 0 ~
+        "District non touché",
+
+      cas_precedents > 0 & cas_actuels > 0 ~
+        "District déjà touché",
+
+      cas_precedents == 0 & cas_actuels > 0 ~
+        "Nouveau district touché",
+
+      cas_precedents > 0 & cas_actuels == 0 ~
+        "Plus aucun cas dans la situation actuelle"
+    )
+  )
+```
+
+
+
 
 ```{r}
 #| label: points-districts
@@ -469,31 +587,35 @@ synthese_region
 ```{r}
 #| label: controle-districts-non-correspondants
 #| include: false
+#| output: false
 
-anti_join(
-  diphterie,
-  st_drop_geometry(districts_sn),
-  by = c("district_sanitaire" = "nom")
-) %>%
-  select(region, district_sanitaire, cas_confirmes)
+districts_non_correspondants <- diphterie_jointure %>%
+  anti_join(
+    districts_sn %>% st_drop_geometry(),
+    by = c("nom_jointure" = "nom")
+  )
+
+districts_non_correspondants %>%
+  select(
+    region,
+    district_sanitaire,
+    nom_geojson,
+    nom_jointure,
+    cas_confirmes
+  )
 ```
 
 ```{r}
 #| label: controle-noms-districts
 #| include: false
+#| output: false
+
 
 districts_sn %>%
   st_drop_geometry() %>%
   select(nom, region_nom) %>%
   filter(
-    region_nom %in% c(
-      "Kédougou",
-      "Louga",
-      "Dakar",
-      "Diourbel",
-      "Kaolack",
-      "Kolda"
-    )
+    region_nom %in% unique(diphterie$region)
   ) %>%
   arrange(region_nom, nom)
 ```
@@ -501,13 +623,14 @@ districts_sn %>%
 ```{r}
 #| label: controle-correspondance-districts
 #| include: false
+#| output: false
 
 districts_diphterie %>%
   st_drop_geometry() %>%
   filter(cas_confirmes > 0) %>%
   select(
     nom,
-    region,
+    region_nom,
     cas_confirmes
   ) %>%
   arrange(desc(cas_confirmes))
@@ -539,16 +662,36 @@ districts_diphterie %>%
 cat(
   "Districts touchés :",
   sum(districts_diphterie$cas_confirmes > 0),
+  "/",
+  n_distinct(diphterie$district_sanitaire),
   "\n"
 )
 
 cat(
-  "Total des cas :",
+  "Total des cas après jointure :",
   sum(districts_diphterie$cas_confirmes),
+  "/",
+  sum(diphterie$cas_confirmes),
   "\n"
 )
-
 ```
+```{r}
+#| label: controle-nouveaux-districts
+#| include: false
+
+comparaison_districts %>%
+  filter(
+    cas_precedents == 0,
+    cas_actuels > 0
+  ) %>%
+  select(
+    district_sanitaire,
+    cas_precedents,
+    cas_actuels
+  )
+```
+
+
 
 <!-- ============================================================ -->
 
@@ -557,6 +700,11 @@ cat(
 <!-- ============================================================ -->
 
 # Situation actuelle
+
+# Situation actuelle
+
+> **Situation au 13 septembre 2026**  
+> Cette page présente la situation de l’épidémie de diphtérie au Sénégal au **13 septembre 2026**, selon les données du communiqué officiel. Les indicateurs, cartes, graphiques et tableaux présentés ci-dessous se rapportent à cette date.
 
 ## Indicateurs clés {height="160"}
 
@@ -957,6 +1105,8 @@ htmltools::tags$div(
 :::
 
 # Évolution
+> **Période comparée — 08 septembre 2026 → 13 septembre 2026**  
+> Cette page présente l’évolution de l’épidémie entre les situations officielles du **08 septembre 2026** et du **13 septembre 2026**. Les variations des cas et de l’étendue géographique présentées ci-dessous se rapportent exclusivement à cette période.
 
 ## Indicateurs d'évolution {height=180}
 
@@ -1087,3 +1237,117 @@ ggplot(
 ```
 
 :::
+
+## Extension géographique de l'épidémie {height=500}
+
+::: {.card}
+### Évolution des régions touchées
+
+```{r}
+#| label: carte-extension-regions
+#| echo: false
+
+pal_evolution <- colorFactor(
+  palette = c(
+    "#41AB5D",  # Région non touchée = vert
+    "#FDAE6B",  # Région déjà touchée = orange
+    "#CB181D",  # Nouvelle région touchée = rouge
+    "#3182BD"   # Plus aucun cas = bleu
+  ),
+  levels = c(
+    "Région non touchée",
+    "Région déjà touchée",
+    "Nouvelle région touchée",
+    "Plus aucun cas dans la situation actuelle"
+  ),
+  ordered = TRUE
+)
+
+leaflet(evolution_regions_carte) %>%
+  addProviderTiles(
+    providers$CartoDB.Positron,
+    options = providerTileOptions(noWrap = TRUE)
+  ) %>%
+  addPolygons(
+    fillColor = ~pal_evolution(statut_evolution),
+    fillOpacity = 0.75,
+    color = "white",
+    weight = 1.2,
+    popup = ~paste0(
+      "<strong>", nom, "</strong><br>",
+      "Cas au 08 septembre : ", cas_precedents, "<br>",
+      "Cas au 13 septembre : ", cas_actuels, "<br>",
+      "<strong>", statut_evolution, "</strong>"
+    )
+  ) %>%
+  addLegend(
+    position = "topright",
+    pal = pal_evolution,
+    values = ~statut_evolution,
+    title = "Évolution géographique",
+    opacity = 0.9
+  )
+```
+:::
+
+## Extension géographique par district sanitaire {height=600}
+
+::: {.card}
+
+### Évolution des districts sanitaires touchés
+
+```{r}
+#| label: carte-extension-districts
+#| echo: false
+
+pal_evolution_districts <- colorFactor(
+  palette = c(
+    "#41AB5D",  # Vert
+    "#FDAE6B",  # Orange
+    "#CB181D",  # Rouge
+    "#3182BD"   # Bleu
+  ),
+  levels = c(
+    "District non touché",
+    "District déjà touché",
+    "Nouveau district touché",
+    "Plus aucun cas dans la situation actuelle"
+  ),
+  ordered = TRUE
+)
+
+leaflet(evolution_districts_carte) %>%
+  addProviderTiles(
+    providers$CartoDB.Positron,
+    options = providerTileOptions(noWrap = TRUE)
+  ) %>%
+  addPolygons(
+    fillColor = ~pal_evolution_districts(statut_evolution),
+    fillOpacity = 0.85,
+    color = "white",
+    weight = 0.8,
+
+    popup = ~paste0(
+      "<strong>", nom, "</strong><br>",
+      "Région : ", region_nom, "<br>",
+      "Cas au 08 septembre : ", cas_precedents, "<br>",
+      "Cas au 13 septembre : ", cas_actuels, "<br>",
+      "<strong>", statut_evolution, "</strong>"
+    )
+  ) %>%
+
+  addLegend(
+    position = "topright",
+    pal = pal_evolution_districts,
+    values = ~statut_evolution,
+    title = "Évolution géographique",
+    opacity = 0.9
+  )
+```
+
+:::
+
+
+
+
+
