@@ -701,8 +701,6 @@ comparaison_districts %>%
 
 # Situation actuelle
 
-# Situation actuelle
-
 > **Situation au 13 septembre 2026**  
 > Cette page présente la situation de l’épidémie de diphtérie au Sénégal au **13 septembre 2026**, selon les données du communiqué officiel. Les indicateurs, cartes, graphiques et tableaux présentés ci-dessous se rapportent à cette date.
 
