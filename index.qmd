@@ -1,6 +1,5 @@
 ---
 title: "Suivi de l'épidémie de diphtérie au Sénégal"
-subtitle: "Situation au 13 septembre 2026"
 format:
   dashboard:
     orientation: rows
@@ -102,7 +101,177 @@ diphterie_actuelle <- read_csv(
 # La situation actuelle reste la base utilisée
 # par le premier onglet du dashboard
 diphterie <- diphterie_actuelle
+
+##
+library(tidyverse)
+
+# ============================================================
+# SITUATION DU 08 SEPTEMBRE 2026
+# ============================================================
+
+situation_08 <- tribble(
+  ~date_situation, ~region, ~district_sanitaire, ~cas_confirmes,
+  "2026-09-08", "Kédougou", "Kédougou", 18,
+  "2026-09-08", "Kédougou", "Saraya", 7,
+  "2026-09-08", "Kédougou", "Salémata", 2,
+  "2026-09-08", "Louga", "Kébémer", 5,
+  "2026-09-08", "Louga", "Darou-Mousty", 3,
+  "2026-09-08", "Dakar", "Guédiawaye", 6,
+  "2026-09-08", "Dakar", "Keur Massar", 1,
+  "2026-09-08", "Thiès", "Mbour", 6,
+  "2026-09-08", "Thiès", "Thiadiaye", 1,
+  "2026-09-08", "Diourbel", "Touba", 3,
+  "2026-09-08", "Diourbel", "Mbacké", 1,
+  "2026-09-08", "Kaolack", "Kaolack", 1,
+  "2026-09-08", "Kaolack", "Guinguinéo", 1,
+  "2026-09-08", "Matam", "Matam", 1,
+  "2026-09-08", "Kolda", "Vélingara", 1
+)
+
+
+# ============================================================
+# SITUATION DU 13 SEPTEMBRE 2026
+# ============================================================
+
+situation_13 <- tribble(
+  ~date_situation, ~region, ~district_sanitaire, ~cas_confirmes,
+  "2026-09-13", "Kédougou", "Kédougou", 18,
+  "2026-09-13", "Kédougou", "Saraya", 8,
+  "2026-09-13", "Kédougou", "Salémata", 2,
+  "2026-09-13", "Dakar", "Guédiawaye", 7,
+  "2026-09-13", "Dakar", "Dakar-Ouest", 1,
+  "2026-09-13", "Dakar", "Dakar-Sud", 1,
+  "2026-09-13", "Dakar", "Keur Massar", 1,
+  "2026-09-13", "Dakar", "Pikine", 1,
+  "2026-09-13", "Dakar", "Sangalkam", 1,
+  "2026-09-13", "Thiès", "Mbour", 9,
+  "2026-09-13", "Thiès", "Thiadiaye", 1,
+  "2026-09-13", "Louga", "Kébémer", 5,
+  "2026-09-13", "Louga", "Darou-Mousty", 3,
+  "2026-09-13", "Louga", "Sakal", 1,
+  "2026-09-13", "Diourbel", "Touba", 7,
+  "2026-09-13", "Diourbel", "Mbacké", 1,
+  "2026-09-13", "Kaolack", "Kaolack", 1,
+  "2026-09-13", "Kaolack", "Guinguinéo", 1,
+  "2026-09-13", "Kaolack", "Ndoffane", 1,
+  "2026-09-13", "Matam", "Matam", 2,
+  "2026-09-13", "Fatick", "Foundiougne", 1,
+  "2026-09-13", "Kolda", "Vélingara", 1,
+  "2026-09-13", "Saint-Louis", "Saint-Louis", 1,
+  "2026-09-13", "Tambacounda", "Bakel", 1
+)
+
+
+# ============================================================
+# SITUATION DU 20 SEPTEMBRE 2026
+# ============================================================
+
+situation_20 <- tribble(
+  ~date_situation, ~region, ~district_sanitaire, ~cas_confirmes,
+
+  "2026-09-20", "Kédougou", "Kédougou", 23,
+  "2026-09-20", "Kédougou", "Saraya", 8,
+  "2026-09-20", "Kédougou", "Salémata", 2,
+
+  "2026-09-20", "Dakar", "Guédiawaye", 7,
+  "2026-09-20", "Dakar", "Dakar-Ouest", 1,
+  "2026-09-20", "Dakar", "Dakar-Sud", 1,
+  "2026-09-20", "Dakar", "Dakar-Nord", 1,
+  "2026-09-20", "Dakar", "Keur Massar", 3,
+  "2026-09-20", "Dakar", "Pikine", 1,
+  "2026-09-20", "Dakar", "Sangalkam", 1,
+
+  "2026-09-20", "Kaolack", "Kaolack", 1,
+  "2026-09-20", "Kaolack", "Guinguinéo", 2,
+  "2026-09-20", "Kaolack", "Ndoffane", 2,
+
+  "2026-09-20", "Thiès", "Mbour", 11,
+  "2026-09-20", "Thiès", "Thiadiaye", 1,
+
+  "2026-09-20", "Louga", "Kébémer", 6,
+  "2026-09-20", "Louga", "Darou-Mousty", 8,
+  "2026-09-20", "Louga", "Sakal", 1,
+  "2026-09-20", "Louga", "Louga", 1,
+
+  "2026-09-20", "Diourbel", "Touba", 12,
+  "2026-09-20", "Diourbel", "Mbacké", 1,
+
+  "2026-09-20", "Matam", "Matam", 5,
+  "2026-09-20", "Matam", "Thilogne", 1,
+
+  "2026-09-20", "Fatick", "Foundiougne", 1,
+
+  "2026-09-20", "Kolda", "Vélingara", 4,
+
+  "2026-09-20", "Saint-Louis", "Saint-Louis", 1,
+  "2026-09-20", "Saint-Louis", "Dagana", 1,
+
+  "2026-09-20", "Tambacounda", "Bakel", 4,
+  "2026-09-20", "Tambacounda", "Diankhé-makha", 1,
+
+  "2026-09-20", "Ziguinchor", "Bignona", 1,
+  "2026-09-20", "Ziguinchor", "Ziguinchor", 1
+)
+
+
+# ============================================================
+# CRÉATION DE L'HISTORIQUE
+# ============================================================
+
+diphterie_historique <- bind_rows(
+  situation_08,
+  situation_13,
+  situation_20
+) %>%
+  mutate(
+    date_situation = as.Date(date_situation)
+  )
+
+
+# ============================================================
+# EXPORT CSV
+# ============================================================
+
+write_csv(
+  diphterie_historique,
+  "data/diphterie_historique.csv"
+)
+
 ```
+```{r}
+#| label: creation-metadata-situations
+#| include: false
+
+situations <- tribble(
+  ~date_situation, ~date_communique, ~deces,
+  "2026-09-08",    "2026-09-09",    8,
+  "2026-09-13",    "2026-09-14",    9,
+  "2026-09-20",    "2026-09-21",   11
+) %>%
+  mutate(
+    date_situation = as.Date(date_situation),
+    date_communique = as.Date(date_communique)
+  )
+
+write_csv(
+  situations,
+  "data/situations.csv"
+)
+```
+```{r}
+#| label: import-situations
+#| include: false
+
+situations <- read_csv(
+  "data/situations.csv",
+  show_col_types = FALSE
+) %>%
+  mutate(
+    date_situation = as.Date(date_situation),
+    date_communique = as.Date(date_communique)
+  )
+```
+
 
 ```{r}
 #| label: import-regions
@@ -144,6 +313,100 @@ districts_sn <- districts_sn %>%
 <!-- 4. PRÉPARATION ET TRAITEMENT DES DONNÉES                    -->
 
 <!-- ============================================================ -->
+```{r}
+#| label: import-historique
+#| include: false
+
+diphterie_historique <- read_csv(
+  "data/diphterie_historique.csv",
+  show_col_types = FALSE
+) %>%
+  mutate(
+    date_situation = as.Date(date_situation)
+  )
+```
+
+```{r}
+#| label: preparation-situations
+#| include: false
+
+dates_situations <- sort(
+  unique(diphterie_historique$date_situation)
+)
+
+# Situation la plus récente
+date_actuelle <- max(dates_situations)
+
+# Situation précédente
+date_precedente <- sort(
+  dates_situations,
+  decreasing = TRUE
+)[2]
+
+# Extraction des deux situations
+diphterie_actuelle <- diphterie_historique %>%
+  filter(date_situation == date_actuelle)
+
+diphterie_precedente <- diphterie_historique %>%
+  filter(date_situation == date_precedente)
+```
+
+```{r}
+#| label: formatage-dates-situations
+#| include: false
+
+# Fonction pour afficher les dates en français
+format_date_fr <- function(date) {
+
+  mois_fr <- c(
+    "janvier", "février", "mars", "avril",
+    "mai", "juin", "juillet", "août",
+    "septembre", "octobre", "novembre", "décembre"
+  )
+
+  paste(
+    format(date, "%d"),
+    mois_fr[as.integer(format(date, "%m"))],
+    format(date, "%Y")
+  )
+}
+#| label: selection-situation-affichee
+#| include: false
+
+# Par défaut, la page "Situation actuelle"
+# affiche la situation la plus récente disponible
+date_selectionnee <- date_actuelle
+
+# Données correspondant à la situation sélectionnée
+diphterie_selectionnee <- diphterie_historique %>%
+  filter(
+    date_situation == date_selectionnee
+  )
+
+# Date formatée pour l'affichage
+date_selectionnee_fr <- format_date_fr(date_selectionnee)
+# Dates utilisées dans le dashboard
+date_actuelle_fr <- format_date_fr(date_actuelle)
+date_precedente_fr <- format_date_fr(date_precedente)
+```
+
+```{r}
+#| label: preparation-liste-situations
+#| include: false
+
+situations_disponibles <- diphterie_historique %>%
+  distinct(date_situation) %>%
+  arrange(desc(date_situation)) %>%
+  mutate(
+    date_fr = vapply(
+      date_situation,
+      format_date_fr,
+      FUN.VALUE = character(1)
+    )
+  )
+```
+
+
 
 ```{r}
 #| label: indicateurs
@@ -151,12 +414,15 @@ districts_sn <- districts_sn %>%
 
 # Nombre total de cas confirmés
 total_cas <- sum(
-  diphterie$cas_confirmes,
+  diphterie_selectionnee$cas_confirmes,
   na.rm = TRUE
 )
 
 # Nombre total de décès
-total_deces <- 9
+metadata_selectionnee <- situations %>%
+  filter(date_situation == date_selectionnee)
+
+total_deces <- metadata_selectionnee$deces
 
 # Létalité
 letalite <- round(
@@ -168,7 +434,9 @@ letalite <- round(
 total_regions <- 14
 
 # Nombre de régions touchées
-regions_touchees <- n_distinct(diphterie$region)
+regions_touchees <- n_distinct(
+  diphterie_selectionnee$region
+)
 
 # Pourcentage de régions touchées
 etendue_geo <- round(
@@ -178,10 +446,50 @@ etendue_geo <- round(
 ```
 
 ```{r}
+#| label: indicateurs-situation-selectionnee
+#| include: false
+
+# Nombre de cas confirmés
+nb_cas <- sum(
+  diphterie_selectionnee$cas_confirmes,
+  na.rm = TRUE
+)
+
+# Nombre de régions touchées
+nb_regions <- n_distinct(
+  diphterie_selectionnee$region
+)
+
+# Nombre de districts sanitaires touchés
+nb_districts <- n_distinct(
+  diphterie_selectionnee$district_sanitaire
+)
+```
+
+```{r}
+#| label: metadata-situation-selectionnee
+#| include: false
+
+metadata_selectionnee <- situations %>%
+  filter(
+    date_situation == date_selectionnee
+  )
+
+nb_deces <- metadata_selectionnee$deces
+
+letalite <- round(
+  (nb_deces / nb_cas) * 100,
+  1
+)
+```
+
+
+
+```{r}
 #| label: synthese-region
 #| include: false
 
-synthese_region <- diphterie %>%
+synthese_region <- diphterie_selectionnee %>%
   group_by(region) %>%
   summarise(
     cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
@@ -393,17 +701,19 @@ regions_diphterie$classe_pct <- factor(
 correspondance_districts <- c(
   "Dakar-Ouest" = "Dakar Ouest",
   "Dakar-Sud"   = "Dakar Sud",
+  "Dakar-Nord"     = "Dakar Nord",
   "Guédiawaye"  = "Guediawaye",
   "Kébémer"     = "Kebemer",
   "Mbacké"      = "Mbacke",
   "Guinguinéo"  = "Guinguineo",
   "Vélingara"   = "Velingara",
   "Kédougou"    = "Kedougou",
-  "Salémata"    = "Salemata"
+  "Salémata"    = "Salemata",
+  "Diankhé-makha"  = "Diankhe Makhan"
 )
 
 # Préparation des noms pour la jointure spatiale
-diphterie_jointure <- diphterie %>%
+diphterie_jointure <- diphterie_selectionnee %>%
   mutate(
     nom_geojson = unname(
       correspondance_districts[district_sanitaire]
@@ -536,7 +846,7 @@ districts_points <- districts_diphterie %>%
 #| label: donnees-graphique-districts
 #| include: false
 
-graphique_districts <- diphterie %>%
+graphique_districts <- diphterie_selectionnee %>%
   group_by(district_sanitaire) %>%
   summarise(
     cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
@@ -572,6 +882,85 @@ hauteur_tableau <- 180 + nb_lignes_tableau * 42
 <!-- 5. CONTRÔLES QUALITÉ                                        -->
 
 <!-- ============================================================ -->
+```{r}
+#| label: controle-formatage-dates
+#| include: false
+
+cat(
+  "Situation précédente :", date_precedente_fr, "\n",
+  "Situation actuelle :", date_actuelle_fr, "\n"
+)
+```
+
+
+
+```{r}
+#| label: controle-situations
+#| include: false
+
+cat(
+  "Situation précédente :",
+  format(date_precedente, "%d/%m/%Y"),
+  "\n"
+)
+
+cat(
+  "Situation actuelle :",
+  format(date_actuelle, "%d/%m/%Y"),
+  "\n"
+)
+
+cat(
+  "Cas situation précédente :",
+  sum(diphterie_precedente$cas_confirmes),
+  "\n"
+)
+
+cat(
+  "Cas situation actuelle :",
+  sum(diphterie_actuelle$cas_confirmes),
+  "\n"
+)
+```
+```{r}
+#| label: controle-liste-situations
+#| include: false
+
+situations_disponibles
+```
+
+
+
+```{r}
+#| label: controle-situation-selectionnee
+#| include: false
+
+cat(
+  "Situation affichée :",
+  date_selectionnee_fr,
+  "\n"
+)
+
+cat(
+  "Cas confirmés :",
+  sum(diphterie_selectionnee$cas_confirmes),
+  "\n"
+)
+
+cat(
+  "Régions touchées :",
+  n_distinct(diphterie_selectionnee$region),
+  "\n"
+)
+
+cat(
+  "Districts touchés :",
+  n_distinct(diphterie_selectionnee$district_sanitaire),
+  "\n"
+)
+```
+
+
 
 ```{r}
 #| label: controle-donnees
@@ -581,8 +970,45 @@ cat("Nombre total de cas :", total_cas, "\n")
 cat("Nombre total de décès :", total_deces, "\n")
 cat("Létalité :", letalite, "%\n\n")
 cat("Etendue géographique :", etendue_geo, "\n")
+cat("Régions :", regions_touchees, "/", total_regions, "\n")
 synthese_region
+
+cat(
+  "Total synthèse régionale :",
+  sum(synthese_region$cas_confirmes),
+  "\n"
+)
+
+cat(
+  "Nombre de régions touchées :",
+  nrow(synthese_region),
+  "\n"
+)
 ```
+
+```{r}
+#| label: controle-indicateurs-situation-selectionnee
+#| include: false
+
+cat(
+  "Cas :", nb_cas, "\n",
+  "Régions :", nb_regions, "\n",
+  "Districts :", nb_districts, "\n"
+)
+```
+
+```{r}
+#| label: controle-metadata-situation
+#| include: false
+
+cat(
+  "Situation :", date_selectionnee_fr, "\n",
+  "Cas confirmés :", nb_cas, "\n",
+  "Décès :", nb_deces, "\n",
+  "Létalité :", letalite, "%\n"
+)
+```
+
 
 ```{r}
 #| label: controle-districts-non-correspondants
@@ -615,7 +1041,7 @@ districts_sn %>%
   st_drop_geometry() %>%
   select(nom, region_nom) %>%
   filter(
-    region_nom %in% unique(diphterie$region)
+    region_nom %in% unique(diphterie_selectionnee$region)
   ) %>%
   arrange(region_nom, nom)
 ```
@@ -663,7 +1089,7 @@ cat(
   "Districts touchés :",
   sum(districts_diphterie$cas_confirmes > 0),
   "/",
-  n_distinct(diphterie$district_sanitaire),
+  n_distinct(diphterie_selectionnee$district_sanitaire),
   "\n"
 )
 
@@ -671,7 +1097,7 @@ cat(
   "Total des cas après jointure :",
   sum(districts_diphterie$cas_confirmes),
   "/",
-  sum(diphterie$cas_confirmes),
+  sum(diphterie_selectionnee$cas_confirmes),
   "\n"
 )
 ```
@@ -701,8 +1127,8 @@ comparaison_districts %>%
 
 # Situation actuelle
 
-> **Situation au 13 septembre 2026**  
-> Cette page présente la situation de l’épidémie de diphtérie au Sénégal au **13 septembre 2026**, selon les données du communiqué officiel. Les indicateurs, cartes, graphiques et tableaux présentés ci-dessous se rapportent à cette date.
+> **Situation au `r date_actuelle_fr`**  
+> Cette page présente la situation de l’épidémie de diphtérie au Sénégal au **`r date_actuelle_fr`**, selon les données du communiqué officiel. Les indicateurs, cartes, graphiques et tableaux présentés ci-dessous se rapportent à cette date.
 
 ## Indicateurs clés {height="160"}
 
@@ -1103,8 +1529,8 @@ htmltools::tags$div(
 :::
 
 # Évolution
-> **Période comparée — 08 septembre 2026 → 13 septembre 2026**  
-> Cette page présente l’évolution de l’épidémie entre les situations officielles du **08 septembre 2026** et du **13 septembre 2026**. Les variations des cas et de l’étendue géographique présentées ci-dessous se rapportent exclusivement à cette période.
+> **Période comparée — `r date_precedente_fr` → `r date_actuelle_fr`**  
+> Cette page présente l’évolution de l’épidémie entre les situations officielles du **`r date_precedente_fr`** et du **`r date_actuelle_fr`**. Les variations des cas et de l’étendue géographique présentées ci-dessous se rapportent exclusivement à cette période.
 
 ## Indicateurs d'évolution {height=180}
 
@@ -1190,7 +1616,10 @@ graphique_regions_evolution <- comparaison_regions %>%
     situation = factor(
       situation,
       levels = c("cas_precedents", "cas_actuels"),
-      labels = c("08 septembre", "13 septembre")
+      labels = c(
+        date_precedente_fr,
+        date_actuelle_fr
+      )
     )
   )
 
@@ -1273,8 +1702,8 @@ leaflet(evolution_regions_carte) %>%
     weight = 1.2,
     popup = ~paste0(
       "<strong>", nom, "</strong><br>",
-      "Cas au 08 septembre : ", cas_precedents, "<br>",
-      "Cas au 13 septembre : ", cas_actuels, "<br>",
+      "Cas au ", date_precedente_fr, " : ", cas_precedents, "<br>",
+      "Cas au ", date_actuelle_fr, " : ", cas_actuels, "<br>",
       "<strong>", statut_evolution, "</strong>"
     )
   ) %>%
@@ -1346,6 +1775,151 @@ leaflet(evolution_districts_carte) %>%
 :::
 
 
+```{r}
+#| label: export-carte-extension-regions
+#| include: false
+
+# ============================================================
+# CARTE PNG - EXTENSION GÉOGRAPHIQUE DE L'ÉPIDÉMIE
+# ============================================================
+
+# 1. Préparer les positions des noms des régions
+# Projection métrique avant le calcul des points d'étiquetage
+labels_regions <- evolution_regions_carte %>%
+  st_transform(32628) %>%
+  st_point_on_surface() %>%
+  st_transform(4326)
 
 
+# 2. Créer la carte
+carte_extension_regions_png <- ggplot(evolution_regions_carte) +
+
+  # Polygones des régions
+  geom_sf(
+    aes(fill = statut_evolution),
+    color = "white",
+    linewidth = 0.7
+  ) +
+
+  # Noms des régions
+  geom_sf_text(
+    data = labels_regions,
+    aes(label = nom),
+    size = 3.5,
+    fontface = "bold",
+    check_overlap = TRUE
+  ) +
+
+  # Couleurs identiques à celles du dashboard
+  scale_fill_manual(
+  values = c(
+    "Région non touchée" = "#41AB5D",
+    "Région déjà touchée" = "#FDAE6B",
+    "Nouvelle région touchée" = "#CB181D",
+    "Plus aucun cas dans la situation actuelle" = "#3182BD"
+  ),
+  name = "Évolution géographique",
+  guide = guide_legend(
+    title.position = "top",
+    title.hjust = 0.5,
+    nrow = 1
+  )
+) +
+
+  # Titres et source
+  labs(
+    title = "Extension géographique de l'épidémie",
+    subtitle = "Diphtérie au Sénégal — évolution du 08 au 13 septembre 2026",
+    caption = "Source : Ministère de la Santé et de l'Hygiène publique du Sénégal"
+  ) +
+
+  # Suppression des axes
+  theme_void() +
+
+  # Mise en page
+  theme(
+    plot.title = element_text(
+      size = 22,
+      face = "bold",
+      hjust = 0.5
+    ),
+
+    plot.subtitle = element_text(
+      size = 14,
+      hjust = 0.5,
+      margin = margin(b = 15)
+    ),
+
+    legend.position = "bottom",
+
+    legend.title = element_text(
+      face = "bold",
+      size = 11
+    ),
+
+    legend.text = element_text(
+      size = 10
+    ),
+
+    plot.caption = element_text(
+      size = 9,
+      hjust = 0,
+      margin = margin(t = 15)
+    ),
+
+    plot.margin = margin(
+      20, 20, 20, 20
+    )
+  )
+
+
+# 3. Afficher la carte dans RStudio
+carte_extension_regions_png
+
+
+# 4. Créer le dossier images s'il n'existe pas
+dir.create(
+  "images",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+
+
+# 5. Export PNG haute résolution
+ggsave(
+  filename = "images/extension_geographique_epidemie.png",
+  plot = carte_extension_regions_png,
+  width = 10,
+  height = 8,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
+
+
+
+
+
+
+
+```{r}
+# Créer le dossier images s'il n'existe pas
+dir.create(
+  "images",
+  showWarnings = FALSE,
+  recursive = TRUE
+)
+
+# Export de la carte en PNG haute résolution
+ggsave(
+  filename = "images/extension_geographique_epidemie.png",
+  plot = carte_extension_regions_png,
+  width = 10,
+  height = 8,
+  units = "in",
+  dpi = 300,
+  bg = "white"
+)
+```
 
