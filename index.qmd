@@ -32,6 +32,28 @@ format:
   overflow: visible !important;
 }
 </style>
+
+
+<style>
+/* Filtre temporel compact */
+.filtre-situation {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 6px 0;
+  padding: 0;
+  width: fit-content;
+}
+/* Taille uniforme des valeurs des 4 indicateurs */
+.valeur-indicateur {
+  font-size: 2.2rem !important;
+  font-weight: 600 !important;
+  flex-shrink: 0 !important;
+}
+
+</style>
+
+
 ```
 
 
@@ -648,49 +670,117 @@ evolution_regions_carte <- regions_sn %>%
 
 
 ```{r}
-#| label: jointure-regions
+#| label: regions-toutes-situations
 #| include: false
 
-# 1. Jointure entre les régions et les données épidémiologiques
-regions_diphterie <- regions_sn %>%
-  st_make_valid() %>%
-  st_transform(4326) %>%
-  left_join(
-    synthese_region,
-    by = c("nom" = "region")
+regions_diphterie_historique <- diphterie_historique %>%
+  group_by(
+    date_situation,
+    region
   ) %>%
-  mutate(
-    cas_confirmes = replace_na(cas_confirmes, 0),
-    pourcentage = replace_na(pourcentage, 0),
-
-    statut = if_else(
-      cas_confirmes > 0,
-      "Région touchée",
-      "Région non touchée"
+  summarise(
+    cas_confirmes = sum(
+      cas_confirmes,
+      na.rm = TRUE
     ),
-
-    classe_pct = case_when(
-      pourcentage == 0 ~ "0 % (aucun cas)",
-      pourcentage <= 2 ~ "> 0 à 2 %",
-      pourcentage <= 5 ~ "> 2 à 5 %",
-      pourcentage <= 15 ~ "> 5 à 15 %",
-      TRUE ~ "> 15 %"
+    .groups = "drop"
+  ) %>%
+  group_by(date_situation) %>%
+  mutate(
+    total_cas = sum(cas_confirmes),
+    pourcentage = round(
+      cas_confirmes / total_cas * 100,
+      1
     )
-  )
-
-
-# 2. Définir l'ordre des classes pour la carte et la légende
-regions_diphterie$classe_pct <- factor(
-  regions_diphterie$classe_pct,
-  levels = c(
-    "0 % (aucun cas)",
-    "> 0 à 2 %",
-    "> 2 à 5 %",
-    "> 5 à 15 %",
-    "> 15 %"
-  )
-)
+  ) %>%
+  ungroup()
 ```
+
+```{r}
+#| label: jointure-regions-toutes-situations
+#| include: false
+
+dates_regions <- sort(
+  unique(regions_diphterie_historique$date_situation)
+)
+
+regions_diphterie_par_situation <- lapply(
+  dates_regions,
+  function(date_i) {
+
+    donnees_date <- regions_diphterie_historique %>%
+      filter(date_situation == date_i)
+
+    regions_sn %>%
+      st_make_valid() %>%
+      st_transform(4326) %>%
+      left_join(
+        donnees_date,
+        by = c("nom" = "region")
+      ) %>%
+      mutate(
+        date_situation = date_i,
+
+        cas_confirmes = replace_na(
+          cas_confirmes,
+          0
+        ),
+
+        pourcentage = replace_na(
+          pourcentage,
+          0
+        ),
+
+        statut = if_else(
+          cas_confirmes > 0,
+          "Région touchée",
+          "Région non touchée"
+        ),
+
+        classe_pct = case_when(
+          pourcentage == 0 ~ "0 % (aucun cas)",
+          pourcentage <= 2 ~ "> 0 à 2 %",
+          pourcentage <= 5 ~ "> 2 à 5 %",
+          pourcentage <= 15 ~ "> 5 à 15 %",
+          TRUE ~ "> 15 %"
+        ),
+
+        classe_pct = factor(
+          classe_pct,
+          levels = c(
+            "0 % (aucun cas)",
+            "> 0 à 2 %",
+            "> 2 à 5 %",
+            "> 5 à 15 %",
+            "> 15 %"
+          )
+        )
+      )
+  }
+)
+
+names(regions_diphterie_par_situation) <-
+  format(dates_regions, "%Y-%m-%d")
+
+# lapply(
+#   regions_diphterie_par_situation,
+#   function(x) {
+#     x %>%
+#       st_drop_geometry() %>%
+#       count(classe_pct, .drop = FALSE)
+#   }
+# )
+```
+
+```{r}
+#| label: regions-diphterie-situation-actuelle
+#| include: false
+
+regions_diphterie <- regions_diphterie_par_situation[[
+  format(date_actuelle, "%Y-%m-%d")
+]]
+```
+
 
 ```{r}
 #| label: preparation-jointure-districts
@@ -876,6 +966,429 @@ nb_lignes_tableau <- nrow(synthese_region) + 1  # +1 pour TOTAL
 
 hauteur_tableau <- 180 + nb_lignes_tableau * 42
 ```
+
+```{r}
+#| label: indicateurs-toutes-situations
+#| include: false
+
+indicateurs_situations <- diphterie_historique %>%
+  group_by(date_situation) %>%
+  summarise(
+    total_cas = sum(cas_confirmes, na.rm = TRUE),
+    regions_touchees = n_distinct(region),
+    districts_touches = n_distinct(district_sanitaire),
+    .groups = "drop"
+  ) %>%
+  left_join(
+    situations %>%
+      select(date_situation, deces),
+    by = "date_situation"
+  ) %>%
+  mutate(
+    letalite = round(deces / total_cas * 100, 1),
+    total_regions = 14,
+    etendue_geo = round(
+      regions_touchees / total_regions * 100,
+      1
+    )
+  ) %>%
+  arrange(date_situation)
+```
+
+```{r}
+#| label: preparation-valueboxes-situations
+#| include: false
+
+valueboxes_situations <- indicateurs_situations %>%
+  mutate(
+    date_id = format(date_situation, "%Y-%m-%d"),
+
+    html = paste0(
+      '<div class="situation-contenu" data-date="', date_id, '">',
+
+      '<div class="indicateurs-historiques">',
+
+      '<div class="indicateur-historique">',
+      '<strong>', total_cas, '</strong>',
+      '<span>Cas confirmés</span>',
+      '</div>',
+
+      '<div class="indicateur-historique">',
+      '<strong>', deces, '</strong>',
+      '<span>Décès</span>',
+      '</div>',
+
+      '<div class="indicateur-historique">',
+      '<strong>', format(letalite, decimal.mark = ","), ' %</strong>',
+      '<span>Létalité</span>',
+      '</div>',
+
+      '<div class="indicateur-historique">',
+      '<strong>', format(etendue_geo, decimal.mark = ","), ' %</strong>',
+      '<span>',
+      regions_touchees, ' / ', total_regions,
+      ' régions',
+      '</span>',
+      '</div>',
+
+      '</div>',
+      '</div>'
+    )
+  )
+```
+
+```{r}
+#| label: donnees-js-situations
+#| include: false
+
+cas_par_situation <- setNames(
+  indicateurs_situations$total_cas,
+  format(indicateurs_situations$date_situation, "%Y-%m-%d")
+)
+```
+```{r}
+#| label: graphique-districts-toutes-situations
+#| include: false
+
+graphique_districts_historique <- diphterie_historique %>%
+  group_by(
+    date_situation,
+    district_sanitaire
+  ) %>%
+  summarise(
+    cas_confirmes = sum(
+      cas_confirmes,
+      na.rm = TRUE
+    ),
+    .groups = "drop"
+  ) %>%
+  arrange(
+    date_situation,
+    cas_confirmes
+  )
+```
+
+```{r}
+#| label: fonction-graphique-districts
+#| include: false
+
+creer_graphique_districts <- function(data) {
+
+  ggplot(
+    data,
+    aes(
+      x = cas_confirmes,
+      y = reorder(district_sanitaire, cas_confirmes)
+    )
+  ) +
+    geom_col(
+      fill = "#D7301F",
+      width = 0.7
+    ) +
+    geom_text(
+      aes(label = cas_confirmes),
+      hjust = -0.25,
+      size = 3.5
+    ) +
+    scale_x_continuous(
+      expand = expansion(mult = c(0, 0.04))
+    ) +
+    labs(
+      x = "Nombre de cas confirmés",
+      y = NULL
+    ) +
+    theme_minimal(base_size = 12) +
+    theme(
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor = element_blank(),
+      plot.margin = margin(10, 20, 10, 10),
+      axis.text.y = element_text(size = 10),
+      axis.title.x = element_text(
+        margin = margin(t = 10)
+      )
+    )
+}
+```
+```{r}
+#| label: graphiques-districts-par-situation
+#| include: false
+
+graphiques_districts <- graphique_districts_historique %>%
+  split(.$date_situation) %>%
+  lapply(creer_graphique_districts)
+
+#names(graphiques_districts)
+#length(graphiques_districts)
+#graphiques_districts[["2026-09-08"]]
+#graphiques_districts[["2026-09-13"]]
+#graphiques_districts[["2026-09-20"]]
+```
+```{r}
+#| label: export-graphiques-districts
+#| include: false
+
+dir.create(
+  "images/graphiques_districts",
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+for (date_nom in names(graphiques_districts)) {
+
+  ggsave(
+    filename = file.path(
+      "images/graphiques_districts",
+      paste0("districts_", date_nom, ".png")
+    ),
+    plot = graphiques_districts[[date_nom]],
+    width = 9,
+    height = 7,
+    dpi = 150,
+    bg = "white"
+  )
+}
+
+#list.files("images/graphiques_districts")
+```
+
+
+
+```{r}
+#| label: fonction-carte-regions
+#| include: false
+
+creer_carte_regions <- function(data) {
+
+  pal_regions <- colorFactor(
+    palette = c(
+      "#F2F2F2",
+      "#FEE5D9",
+      "#FCAE91",
+      "#FB6A4A",
+      "#CB181D"
+    ),
+    domain = data$classe_pct
+  )
+
+  leaflet(data) %>%
+
+    addProviderTiles(
+      providers$CartoDB.Positron
+    ) %>%
+
+    addPolygons(
+      fillColor = ~pal_regions(classe_pct),
+      fillOpacity = 0.85,
+      color = "white",
+      weight = 1,
+
+      label = ~paste0(
+        nom,
+        " : ",
+        pourcentage,
+        " %"
+      ),
+
+      popup = ~paste0(
+        "<strong>", nom, "</strong><br>",
+        "Cas confirmés : ", cas_confirmes, "<br>",
+        "Part des cas : ", pourcentage, " %<br>",
+        "Statut : ", statut
+      ),
+
+      highlightOptions = highlightOptions(
+        weight = 2,
+        color = "#333333",
+        bringToFront = TRUE
+      )
+    ) %>%
+
+    addLegend(
+      position = "topright",
+      pal = pal_regions,
+      values = ~classe_pct,
+      title = "Part des cas confirmés",
+      opacity = 1
+    )
+}
+```
+
+```{r}
+#| label: cartes-regions-par-situation
+#| include: false
+
+cartes_regions <- lapply(
+  regions_diphterie_par_situation,
+  creer_carte_regions
+)
+
+#names(cartes_regions)
+#cartes_regions[["2026-09-13"]]
+```
+```{r}
+#| label: geojson-regions-par-situation
+#| include: false
+
+geojson_regions <- lapply(
+  regions_diphterie_par_situation,
+  function(x) {
+
+    tempfile_geojson <- tempfile(
+      fileext = ".geojson"
+    )
+
+    sf::st_write(
+      x,
+      tempfile_geojson,
+      driver = "GeoJSON",
+      quiet = TRUE,
+      delete_dsn = TRUE
+    )
+
+    paste(
+      readLines(
+        tempfile_geojson,
+        warn = FALSE,
+        encoding = "UTF-8"
+      ),
+      collapse = ""
+    )
+  }
+)
+```
+
+
+
+```{r}
+#| label: json-regions-par-situation
+#| include: false
+
+json_regions <- paste0(
+  "{",
+  paste(
+    sprintf(
+      '"%s": %s',
+      names(geojson_regions),
+      unlist(geojson_regions)
+    ),
+    collapse = ","
+  ),
+  "}"
+)
+
+#names(geojson_regions)
+#nchar(json_regions)
+#substr(json_regions, 1, 100)
+```
+
+```{r}
+#| label: districts-toutes-situations
+#| include: false
+
+# Agrégation des cas par district pour chaque situation
+districts_diphterie_historique <- diphterie_historique %>%
+  mutate(
+    nom_geojson = unname(
+      correspondance_districts[district_sanitaire]
+    ),
+    nom_jointure = if_else(
+      !is.na(nom_geojson),
+      nom_geojson,
+      district_sanitaire
+    )
+  ) %>%
+  group_by(
+    date_situation,
+    nom_jointure
+  ) %>%
+  summarise(
+    cas_confirmes = sum(cas_confirmes, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+dates_districts <- sort(
+  unique(districts_diphterie_historique$date_situation)
+)
+
+districts_points_par_situation <- lapply(
+  dates_districts,
+  function(date_i) {
+
+    donnees_date <- districts_diphterie_historique %>%
+      filter(
+        date_situation == date_i,
+        cas_confirmes > 0
+      )
+
+    districts_sn %>%
+      st_make_valid() %>%
+      st_transform(4326) %>%
+      left_join(
+        donnees_date,
+        by = c("nom" = "nom_jointure")
+      ) %>%
+      filter(!is.na(cas_confirmes), cas_confirmes > 0) %>%
+      st_transform(32628) %>%
+      st_point_on_surface() %>%
+      st_transform(4326) %>%
+      select(
+        nom,
+        region_nom,
+        cas_confirmes,
+        geometry
+      )
+  }
+)
+
+names(districts_points_par_situation) <-
+  format(dates_districts, "%Y-%m-%d")
+```
+
+```{r}
+#| label: geojson-districts-par-situation
+#| include: false
+
+geojson_districts <- lapply(
+  districts_points_par_situation,
+  function(x) {
+
+    tempfile_geojson <- tempfile(
+      fileext = ".geojson"
+    )
+
+    sf::st_write(
+      x,
+      tempfile_geojson,
+      driver = "GeoJSON",
+      quiet = TRUE,
+      delete_dsn = TRUE
+    )
+
+    paste(
+      readLines(
+        tempfile_geojson,
+        warn = FALSE,
+        encoding = "UTF-8"
+      ),
+      collapse = ""
+    )
+  }
+)
+
+json_districts <- paste0(
+  "{",
+  paste(
+    sprintf(
+      '"%s": %s',
+      names(geojson_districts),
+      unlist(geojson_districts)
+    ),
+    collapse = ","
+  ),
+  "}"
+)
+```
+
 
 <!-- ============================================================ -->
 
@@ -1116,6 +1629,74 @@ comparaison_districts %>%
     cas_actuels
   )
 ```
+```{r}
+#| label: controle-indicateurs-toutes-situations
+#| include: false
+
+indicateurs_situations
+```
+
+
+```{r}
+#| include: false
+valueboxes_situations %>%
+  select(date_situation, total_cas, deces, letalite, etendue_geo)
+```
+```{r}
+#| label: contrôle-cas-toutes-situation
+#| include: false
+#cas_par_situation
+```
+
+
+```{r}
+#| label: contrôle-graphique-historique
+#| include: false
+graphique_districts_historique %>%
+  group_by(date_situation) %>%
+  summarise(
+    districts = n_distinct(district_sanitaire),
+    cas = sum(cas_confirmes),
+    .groups = "drop"
+  )
+```
+
+```{r}
+#| label: test-fonction-graphique-districts
+#| include: false
+
+test_graphique_districts <- graphique_districts_historique %>%
+  filter(date_situation == date_actuelle)
+
+graphique_test <- creer_graphique_districts(
+  test_graphique_districts
+)
+```
+```{r}
+#| label: controle-regions-toutes-situations
+#| include: false
+
+regions_diphterie_historique %>%
+  group_by(date_situation) %>%
+  summarise(
+    cas = sum(cas_confirmes),
+    regions_touchees = sum(cas_confirmes > 0),
+    .groups = "drop"
+  )
+```
+```{r}
+#| label: test-carte-regions
+#| include: false
+#| echos: false
+
+#carte_test <- creer_carte_regions(
+#  regions_diphterie_par_situation[[
+#   format(date_actuelle, "%Y-%m-%d")
+#  ]]
+#)
+
+#carte_test
+```
 
 
 
@@ -1124,21 +1705,50 @@ comparaison_districts %>%
 <!-- 6. AFFICHAGE DU DASHBOARD                                   -->
 
 <!-- ============================================================ -->
-
 # Situation actuelle
+## Indicateurs clés {height="190"}
+```{r}
+#| label: filtre-situation
+#| echo: false
+#| results: asis
 
-> **Situation au `r date_actuelle_fr`**  
-> Cette page présente la situation de l’épidémie de diphtérie au Sénégal au **`r date_actuelle_fr`**, selon les données du communiqué officiel. Les indicateurs, cartes, graphiques et tableaux présentés ci-dessous se rapportent à cette date.
+options_situations <- situations_disponibles %>%
+  mutate(
+    option = paste0(
+      '<option value="',
+      format(date_situation, "%Y-%m-%d"),
+      '"',
+      if_else(
+        date_situation == date_actuelle,
+        " selected",
+        ""
+      ),
+      ">",
+      date_fr,
+      "</option>"
+    )
+  ) %>%
+  pull(option) %>%
+  paste(collapse = "\n")
 
-## Indicateurs clés {height="160"}
-
+cat(
+  '<div class="filtre-situation">',
+  '<label for="select-situation"><strong>Situation au :</strong></label>',
+  '<select id="select-situation">',
+  options_situations,
+  '</select>',
+  '</div>'
+)
+```
 ```{r}
 #| content: valuebox
 #| title: "Cas confirmés"
 #| icon: clipboard2-pulse
 #| color: danger
 
-total_cas
+htmltools::HTML(
+  paste0("<span id='valeur-cas' class='valeur-indicateur' style='font-weight:620; flex-shrink:0;'>", total_cas, "</span>")
+)
 ```
 
 ```{r}
@@ -1147,7 +1757,9 @@ total_cas
 #| icon: heart-pulse
 #| color: dark
 
-total_deces
+htmltools::HTML(
+  paste0("<span id='valeur-deces' class='valeur-indicateur' style='font-weight:620; flex-shrink:0;'>", total_deces, "</span>")
+)
 ```
 
 ```{r}
@@ -1156,7 +1768,9 @@ total_deces
 #| icon: activity
 #| color: warning
 
-paste0(letalite, " %")
+htmltools::HTML(
+  paste0("<span id='valeur-letalite' class='valeur-indicateur' style='font-weight:620; flex-shrink:0;'>", letalite, " %</span>")
+)
 ```
 
 ```{r}
@@ -1178,15 +1792,14 @@ htmltools::HTML(
       line-height:1;
     '>",
 
-    "<span style='
-      font-size:2em;
-      font-weight:600;
+    "<span id='valeur-etendue' class='valeur-indicateur' style='
+      font-weight:620;
       flex-shrink:0;
     '>",
     etendue_geo, " %",
     "</span>",
 
-    "<span style='
+    "<span id='valeur-regions' style='
       font-size:0.68em;
       font-weight:500;
       flex-shrink:1;
@@ -1219,7 +1832,11 @@ pal_regions <- colorFactor(
 )
 
 # Carte
-leaflet(regions_diphterie) %>%
+leaflet(
+  regions_diphterie,
+  elementId = "carte-regions-dynamique"
+) %>%
+
   
   # Fond de carte
   addProviderTiles(
@@ -1297,7 +1914,7 @@ legend_radius <- sqrt(legend_values) * 4
 
 # Construction de la légende
 legend_html <- paste0(
-  "<div style='
+  "<div id='legende-districts-dynamique' style='
     background:white;
     padding:10px 12px;
     border-radius:4px;
@@ -1343,7 +1960,9 @@ legend_html <- paste0(
 )
 
 # Carte
-leaflet() %>%
+leaflet(
+  elementId = "carte-districts-dynamique"
+) %>%
   
   addProviderTiles(
     providers$CartoDB.Positron
@@ -1396,76 +2015,74 @@ leaflet() %>%
 
 ::: {.card title="Cas confirmés par district sanitaire"}
 
+
 ```{r}
 #| label: graphique-cas-districts
 #| echo: false
+#| results: asis
 
-ggplot(
-  graphique_districts,
-  aes(
-    x = cas_confirmes,
-    y = reorder(district_sanitaire, cas_confirmes)
-  )
-) +
-  geom_col(
-    fill = "#D7301F",
-    width = 0.7
-  ) +
-  geom_text(
-    aes(label = cas_confirmes),
-    hjust = -0.25,
-    size = 3.5
-  ) +
-  scale_x_continuous(
-    expand = expansion(mult = c(0, 0.04))
-  ) +
-  labs(
-    x = "Nombre de cas confirmés",
-    y = NULL
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    panel.grid.major.y = element_blank(),
-    panel.grid.minor = element_blank(),
-    plot.margin = margin(10, 20, 10, 10),
-    axis.text.y = element_text(size = 10),
-    axis.title.x = element_text(
-      margin = margin(t = 10)
-    )
-  )
+src_initial <- paste0(
+  "images/graphiques_districts/districts_",
+  format(date_actuelle, "%Y-%m-%d"),
+  ".png"
+)
+
+cat(
+  '<div id="conteneur-graphique-districts" style="width:100%;">',
+  '<img id="graphique-districts-dynamique" ',
+  'src="', src_initial, '" ',
+  'alt="Cas confirmés par district sanitaire" ',
+  'style="width:100%; height:auto; display:block;">',
+  '</div>'
+)
 ```
 
 :::
-
 
 ::: {.card title="Synthèse régionale"}
 
 ```{r}
 #| label: tableau-synthese
 #| echo: false
+#| results: asis
 
-tableau_region %>%
-  gt() %>%
-  fmt_number(
-    columns = `Part des cas (%)`,
-    decimals = 1
-  ) %>%
-  cols_align(
-    align = "left",
-    columns = Région
-  ) %>%
-  cols_align(
-    align = "center",
-    columns = c(
-      `Cas confirmés`,
-      `Part des cas (%)`
+lignes_tableau_region <- tableau_region %>%
+  mutate(
+    `Part des cas (%)` = format(
+      `Part des cas (%)`,
+      nsmall = 1,
+      decimal.mark = ","
     )
   ) %>%
-  opt_table_outline() %>%
-  opt_vertical_padding(scale = 0.8) %>%
-  tab_options(
-    table.width = pct(100)
-  )
+  pmap_chr(
+    function(Région, `Cas confirmés`, `Part des cas (%)`) {
+      paste0(
+        "<tr>",
+        "<td style=\"text-align:left;\">", Région, "</td>",
+        "<td style=\"text-align:center;\">", `Cas confirmés`, "</td>",
+        "<td style=\"text-align:center;\">", `Part des cas (%)`, "</td>",
+        "</tr>"
+      )
+    }
+  ) %>%
+  paste(collapse = "")
+
+cat(
+  '<div style="width:100%; overflow-x:auto;">',
+  '<table style="width:100%; border-collapse:collapse;">',
+  '<thead>',
+  '<tr>',
+  '<th style="text-align:left; padding:8px; border-bottom:2px solid #ddd;">Région</th>',
+  '<th style="text-align:center; padding:8px; border-bottom:2px solid #ddd;">Cas confirmés</th>',
+  '<th style="text-align:center; padding:8px; border-bottom:2px solid #ddd;">Part des cas (%)</th>',
+  '</tr>',
+  '</thead>',
+  '<tbody id="corps-tableau-region-dynamique">',
+  lignes_tableau_region,
+  '</tbody>',
+  '</table>',
+  '</div>'
+)
 ``` 
 
 :::
@@ -1497,7 +2114,10 @@ htmltools::tags$div(
     ),
     htmltools::tags$p(
       htmltools::tags$strong("Date de situation : "),
-      metadonnees$date_situation
+      htmltools::tags$span(
+        id = "metadata-date-situation",
+        date_selectionnee_fr
+      )
     ),
     htmltools::tags$p(
       htmltools::tags$strong("Source : "),
@@ -1517,7 +2137,10 @@ htmltools::tags$div(
     ),
     htmltools::tags$p(
       htmltools::tags$strong("Date du communiqué : "),
-      metadonnees$date_communication
+      htmltools::tags$span(
+        id = "metadata-date-communique",
+        format_date_fr(metadata_selectionnee$date_communique[1])
+      )
     ),
     htmltools::tags$p(
       htmltools::tags$strong("Unité géographique : "),
@@ -1526,6 +2149,375 @@ htmltools::tags$div(
   )
 )
 ```
+```{r}
+#| label: javascript-filtre-indicateurs
+#| echo: false
+#| results: asis
+
+donnees_js <- indicateurs_situations %>%
+  transmute(
+    date = format(date_situation, "%Y-%m-%d"),
+    total_cas,
+    deces,
+    letalite,
+    regions_touchees,
+    total_regions,
+    etendue_geo
+  )
+
+json_indicateurs <- jsonlite::toJSON(
+  split(donnees_js[, -1], donnees_js$date),
+  dataframe = "rows",
+  auto_unbox = TRUE
+)
+
+# Données du tableau de synthèse régionale pour chaque situation
+tableaux_regions_js <- regions_diphterie_historique %>%
+  transmute(
+    date = format(date_situation, "%Y-%m-%d"),
+    region,
+    cas_confirmes,
+    pourcentage
+  ) %>%
+  arrange(date, desc(cas_confirmes), region)
+
+json_tableaux_regions <- jsonlite::toJSON(
+  split(tableaux_regions_js[, -1], tableaux_regions_js$date),
+  dataframe = "rows",
+  auto_unbox = TRUE
+)
+
+# Métadonnées variables selon la situation
+metadata_js <- situations %>%
+  transmute(
+    date = format(date_situation, "%Y-%m-%d"),
+    date_situation_fr = vapply(
+      date_situation,
+      format_date_fr,
+      FUN.VALUE = character(1)
+    ),
+    date_communique_fr = vapply(
+      date_communique,
+      format_date_fr,
+      FUN.VALUE = character(1)
+    )
+  )
+
+json_metadata <- jsonlite::toJSON(
+  split(metadata_js[, -1], metadata_js$date),
+  dataframe = "rows",
+  auto_unbox = TRUE
+)
+
+cat(
+  "<script>
+  document.addEventListener('DOMContentLoaded', function() {
+
+    const selecteur = document.getElementById('select-situation');
+
+    const valeurCas = document.getElementById('valeur-cas');
+    const valeurDeces = document.getElementById('valeur-deces');
+    const valeurLetalite = document.getElementById('valeur-letalite');
+    const valeurEtendue = document.getElementById('valeur-etendue');
+    const valeurRegions = document.getElementById('valeur-regions');
+
+    const graphiqueDistricts =
+      document.getElementById('graphique-districts-dynamique');
+
+    const situations = ", json_indicateurs, ";
+    
+    const regionsParSituation = ", json_regions, ";
+    const tableauxRegions = ", json_tableaux_regions, ";
+    const metadataParSituation = ", json_metadata, ";
+    const districtsParSituation = ", json_districts, ";
+
+    if (!selecteur) return;
+
+    function actualiserIndicateurs() {
+
+      const date = selecteur.value;
+      const d = situations[date];
+
+      if (!d || !d[0]) return;
+
+      const x = d[0];
+
+      if (valeurCas)
+        valeurCas.textContent = x.total_cas;
+
+      if (valeurDeces)
+        valeurDeces.textContent = x.deces;
+
+      if (valeurLetalite)
+        valeurLetalite.textContent =
+          String(x.letalite).replace('.', ',') + ' %';
+
+      if (valeurEtendue)
+        valeurEtendue.textContent =
+          String(x.etendue_geo).replace('.', ',') + ' %';
+
+      if (valeurRegions)
+        valeurRegions.textContent =
+          '(' + x.regions_touchees +
+          ' / ' + x.total_regions +
+          ' régions)';
+
+      if (graphiqueDistricts) {
+        graphiqueDistricts.src =
+          'images/graphiques_districts/districts_' +
+          date +
+          '.png';
+      }
+      
+      // Mise à jour du tableau de synthèse régionale
+      const corpsTableauRegion =
+        document.getElementById('corps-tableau-region-dynamique');
+
+      const donneesRegions = tableauxRegions[date];
+
+      if (corpsTableauRegion && donneesRegions) {
+
+        let htmlRegions = '';
+        let totalRegions = 0;
+
+        donneesRegions.forEach(function(r) {
+          totalRegions += Number(r.cas_confirmes) || 0;
+
+          htmlRegions +=
+            '<tr>' +
+            '<td style=\"text-align:left;\">' + r.region + '</td>' +
+            '<td style=\"text-align:center;\">' + r.cas_confirmes + '</td>' +
+            '<td style=\"text-align:center;\">' +
+            String(r.pourcentage).replace('.', ',') + '</td>' +
+            '</tr>';
+        });
+
+        htmlRegions +=
+          '<tr style=\"font-weight:bold;\">' +
+          '<td style=\"text-align:left;\">TOTAL</td>' +
+          '<td style=\"text-align:center;\">' + totalRegions + '</td>' +
+          '<td style=\"text-align:center;\">100,0</td>' +
+          '</tr>';
+
+        corpsTableauRegion.innerHTML = htmlRegions;
+      }
+
+      // Mise à jour des métadonnées
+      const metadataDateSituation =
+        document.getElementById('metadata-date-situation');
+
+      const metadataDateCommunique =
+        document.getElementById('metadata-date-communique');
+
+      const metadataSituation = metadataParSituation[date];
+
+      if (
+        metadataSituation &&
+        metadataSituation[0]
+      ) {
+        const m = metadataSituation[0];
+
+        if (metadataDateSituation)
+          metadataDateSituation.textContent =
+            m.date_situation_fr;
+
+        if (metadataDateCommunique)
+          metadataDateCommunique.textContent =
+            m.date_communique_fr;
+      }
+
+            // Mise à jour de la carte régionale
+      const geojson = regionsParSituation[date];
+
+      const carteElement =
+        document.getElementById('carte-regions-dynamique');
+
+            const widget =
+        carteElement &&
+        HTMLWidgets.find('#carte-regions-dynamique');
+
+      if (
+        geojson &&
+        widget &&
+        widget.getMap
+      ) {
+
+        const map = widget.getMap();
+
+        // Supprimer uniquement les anciens polygones régionaux
+        map.eachLayer(function(layer) {
+          if (
+            layer instanceof L.Path &&
+            !(layer instanceof L.CircleMarker)
+          ) {
+            map.removeLayer(layer);
+          }
+        });
+
+        // Fonction de couleur identique à la carte R
+        function couleurRegion(classe) {
+
+          const couleurs = {
+            '0 % (aucun cas)': '#F2F2F2',
+            '> 0 à 2 %': '#FEE5D9',
+            '> 2 à 5 %': '#FCAE91',
+            '> 5 à 15 %': '#FB6A4A',
+            '> 15 %': '#CB181D'
+          };
+
+          return couleurs[classe] || '#F2F2F2';
+        }
+
+        // Ajouter les régions de la situation sélectionnée
+        L.geoJSON(
+          geojson,
+          {
+            style: function(feature) {
+              return {
+                fillColor:
+                  couleurRegion(feature.properties.classe_pct),
+                fillOpacity: 0.85,
+                color: 'white',
+                weight: 1
+              };
+            },
+
+            onEachFeature: function(feature, layer) {
+
+              const p = feature.properties;
+
+              layer.bindTooltip(
+                p.nom + ' : ' + p.pourcentage + ' %'
+              );
+
+              layer.bindPopup(
+                '<strong>' + p.nom + '</strong><br>' +
+                'Cas confirmés : ' + p.cas_confirmes + '<br>' +
+                'Part des cas : ' + p.pourcentage + ' %<br>' +
+                'Statut : ' + p.statut
+              );
+
+              layer.on({
+                mouseover: function(e) {
+                  e.target.setStyle({
+                    weight: 2,
+                    color: '#333333'
+                  });
+                  e.target.bringToFront();
+                },
+
+                mouseout: function(e) {
+                  e.target.setStyle({
+                    weight: 1,
+                    color: 'white'
+                  });
+                }
+              });
+            }
+          }
+        ).addTo(map);
+      }
+
+      // Mise à jour de la carte des districts
+      const geojsonDistricts = districtsParSituation[date];
+      const carteDistrictsElement =
+        document.getElementById('carte-districts-dynamique');
+      const widgetDistricts =
+        carteDistrictsElement &&
+        HTMLWidgets.find('#carte-districts-dynamique');
+
+      if (
+        geojsonDistricts &&
+        widgetDistricts &&
+        widgetDistricts.getMap
+      ) {
+        const mapDistricts = widgetDistricts.getMap();
+
+        // Retirer uniquement les anciens cercles proportionnels
+        mapDistricts.eachLayer(function(layer) {
+          if (layer instanceof L.CircleMarker) {
+            mapDistricts.removeLayer(layer);
+          }
+        });
+
+        let maxCasDistrict = 0;
+
+        L.geoJSON(
+          geojsonDistricts,
+          {
+            pointToLayer: function(feature, latlng) {
+              const p = feature.properties;
+              const cas = Number(p.cas_confirmes) || 0;
+              maxCasDistrict = Math.max(maxCasDistrict, cas);
+
+              return L.circleMarker(latlng, {
+                radius: Math.sqrt(cas) * 4,
+                fillColor: '#D7301F',
+                fillOpacity: 0.75,
+                color: 'white',
+                weight: 1
+              });
+            },
+
+            onEachFeature: function(feature, layer) {
+              const p = feature.properties;
+
+              layer.bindTooltip(
+                p.nom + ' : ' + p.cas_confirmes + ' cas'
+              );
+
+              layer.bindPopup(
+                '<strong>' + p.nom + '</strong><br>' +
+                'Région : ' + p.region_nom + '<br>' +
+                'Cas confirmés : ' + p.cas_confirmes
+              );
+            }
+          }
+        ).addTo(mapDistricts);
+
+        // Actualiser la légende des cercles proportionnels
+        const legendeDistricts =
+          document.getElementById('legende-districts-dynamique');
+
+        if (legendeDistricts) {
+          const valeursBase = [1, 5, 10, maxCasDistrict];
+          const valeursLegende = [...new Set(valeursBase)]
+            .filter(function(v) {
+              return v > 0 && v <= maxCasDistrict;
+            })
+            .sort(function(a, b) { return a - b; });
+
+          let htmlLegende =
+            '<strong>Cas confirmés</strong><br><br>';
+
+          valeursLegende.forEach(function(val) {
+            const rad = Math.sqrt(val) * 4;
+            htmlLegende +=
+              '<div style=\"display:flex;align-items:center;margin-bottom:6px;\">' +
+              '<span style=\"display:inline-block;width:' + (rad * 2) +
+              'px;height:' + (rad * 2) +
+              'px;border-radius:50%;background:#D7301F;opacity:0.75;' +
+              'border:1px solid white;margin-right:8px;\"></span>' +
+              '<span>' + val + ' cas</span></div>';
+          });
+
+          legendeDistricts.innerHTML = htmlLegende;
+        }
+      }
+    }
+
+    actualiserIndicateurs();
+
+    selecteur.addEventListener(
+      'change',
+      actualiserIndicateurs
+    );
+
+  });
+  </script>"
+)
+```
+
 :::
 
 # Évolution
@@ -1922,4 +2914,7 @@ ggsave(
   bg = "white"
 )
 ```
+
+
+
 
