@@ -114,11 +114,12 @@ diphterie_precedente <- read_csv(
   show_col_types = FALSE
 )
 
-# Situation actuelle : 13 septembre 2026
+# Situation actuelle : 04 octobre 2026
 diphterie_actuelle <- read_csv(
-  "Data/diphterie_senegal_13_septembre_2026.csv",
+  "data/diphterie_senegal_04_octobre_2026.csv",
   show_col_types = FALSE
 )
+
 
 # La situation actuelle reste la base utilisée
 # par le premier onglet du dashboard
@@ -235,6 +236,18 @@ situation_20 <- tribble(
   "2026-09-20", "Ziguinchor", "Ziguinchor", 1
 )
 
+# ============================================================
+# SITUATION DU 04 OCTOBRE 2026
+# ============================================================
+
+situation_04_octobre <- readr::read_csv(
+  "Data/diphterie_senegal_04_octobre_2026.csv",
+  col_types = readr::cols(
+    .default = readr::col_guess(),
+    date_situation = readr::col_character()
+  ),
+  show_col_types = FALSE
+)
 
 # ============================================================
 # CRÉATION DE L'HISTORIQUE
@@ -243,7 +256,8 @@ situation_20 <- tribble(
 diphterie_historique <- bind_rows(
   situation_08,
   situation_13,
-  situation_20
+  situation_20,
+  situation_04_octobre
 ) %>%
   mutate(
     date_situation = as.Date(date_situation)
@@ -268,10 +282,11 @@ situations <- tribble(
   ~date_situation, ~date_communique, ~deces,
   "2026-09-08",    "2026-09-09",    8,
   "2026-09-13",    "2026-09-14",    9,
-  "2026-09-20",    "2026-09-21",   11
+  "2026-09-20",    "2026-09-21",   11,
+  "2026-10-04",    "2026-10-05",   11
 ) %>%
   mutate(
-    date_situation = as.Date(date_situation),
+    date_situation  =  as.Date(date_situation),
     date_communique = as.Date(date_communique)
   )
 
