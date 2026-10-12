@@ -249,6 +249,15 @@ situation_04_octobre <- readr::read_csv(
   show_col_types = FALSE
 )
 
+situation_11_octobre <- readr::read_csv(
+  "Data/diphterie_senegal_11_octobre_2026.csv",
+  col_types = readr::cols(
+    .default = readr::col_guess(),
+    date_situation = readr::col_character()
+  ),
+  show_col_types = FALSE
+)
+
 # ============================================================
 # CRÉATION DE L'HISTORIQUE
 # ============================================================
@@ -257,7 +266,8 @@ diphterie_historique <- bind_rows(
   situation_08,
   situation_13,
   situation_20,
-  situation_04_octobre
+  situation_04_octobre,
+  situation_11_octobre
 ) %>%
   mutate(
     date_situation = as.Date(date_situation)
@@ -283,7 +293,8 @@ situations <- tribble(
   "2026-09-08",    "2026-09-09",    8,
   "2026-09-13",    "2026-09-14",    9,
   "2026-09-20",    "2026-09-21",   11,
-  "2026-10-04",    "2026-10-05",   11
+  "2026-10-04",    "2026-10-05",   11,
+  "2026-10-11",    "2026-10-12",   12
 ) %>%
   mutate(
     date_situation  =  as.Date(date_situation),
