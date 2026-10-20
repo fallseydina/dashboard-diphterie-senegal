@@ -249,6 +249,10 @@ situation_04_octobre <- readr::read_csv(
   show_col_types = FALSE
 )
 
+# ============================================================
+# SITUATION DU 11 OCTOBRE 2026
+# ============================================================
+
 situation_11_octobre <- readr::read_csv(
   "Data/diphterie_senegal_11_octobre_2026.csv",
   col_types = readr::cols(
@@ -259,6 +263,18 @@ situation_11_octobre <- readr::read_csv(
 )
 
 # ============================================================
+# SITUATION DU 18 OCTOBRE 2026
+# ============================================================
+situation_18_octobre <- readr::read_csv(
+  "Data/diphterie_senegal_18_octobre_2026.csv",
+  col_types = readr::cols(
+    .default = readr::col_guess(),
+    date_situation = readr::col_character()
+  ),
+  show_col_types = FALSE
+)  
+
+# ============================================================
 # CRÉATION DE L'HISTORIQUE
 # ============================================================
 
@@ -267,7 +283,8 @@ diphterie_historique <- bind_rows(
   situation_13,
   situation_20,
   situation_04_octobre,
-  situation_11_octobre
+  situation_11_octobre,
+  situation_18_octobre
 ) %>%
   mutate(
     date_situation = as.Date(date_situation)
@@ -294,7 +311,8 @@ situations <- tribble(
   "2026-09-13",    "2026-09-14",    9,
   "2026-09-20",    "2026-09-21",   11,
   "2026-10-04",    "2026-10-05",   11,
-  "2026-10-11",    "2026-10-12",   12
+  "2026-10-11",    "2026-10-12",   12,
+  "2026-10-18",    "2026-10-19",   14
 ) %>%
   mutate(
     date_situation  =  as.Date(date_situation),
@@ -2914,33 +2932,4 @@ ggsave(
   bg = "white"
 )
 ```
-
-
-
-
-
-
-
-```{r}
-# Créer le dossier images s'il n'existe pas
-dir.create(
-  "images",
-  showWarnings = FALSE,
-  recursive = TRUE
-)
-
-# Export de la carte en PNG haute résolution
-ggsave(
-  filename = "images/extension_geographique_epidemie.png",
-  plot = carte_extension_regions_png,
-  width = 10,
-  height = 8,
-  units = "in",
-  dpi = 300,
-  bg = "white"
-)
-```
-
-
-
 
